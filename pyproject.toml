@@ -1,0 +1,7 @@
+[project]
+name = "quacs"
+version = "0.1.0"
+description = "Quick Updates to Aerosol and Chemistry Schemes"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
