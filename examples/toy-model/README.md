@@ -8,9 +8,10 @@ A small pure-Python "host model" that runs three toy parameterizations through Q
   runs five timesteps.
 - `host_adapter.py`: `ToyHostAdapter`, the toy model's implementation of the QUACS
   `HostAdapter` protocol. It owns a grid of 4 columns by 3 levels (12 grid cells) and
-  two variables of its own, `t_host` and `surface_wind_speed`.
+  two variables of its own, `t_host`, `surface_wind_speed`, and `cos_solar_zenith_angle`.
 - `parameterizations.py`: three parameterizations that know nothing about the toy model.
-  - `HeatingScheme` raises `temperature` in every grid cell.
+  - `HeatingScheme` raises `temperature` in every grid cell, in proportion to the
+    sunlight on its column, and records each column's net heating in `column_heating`.
   - `OzoneChemistry` creates `ozone` and works down each column from the model top.
   - `SurfaceDeposition` creates `surface_ozone_flux` from the ozone nearest the surface
     and the toy model's `surface_wind_speed`.
@@ -47,6 +48,9 @@ Functions passed to `for_each_cell` and `for_each_column` must follow these rule
 Values returned by `get()` are plain numbers. Changing one does not change the host
 variable; use `set(value)` for that.
 
+A `for_each_cell` function can read a variable that has one value per column in every
+grid cell of that column, but cannot set it. Use `for_each_column` to set it.
+
 The toy host calls each function once per grid cell or once per column in a Python
 loop. The rules above are what would let a host compile the functions instead.
 
@@ -64,14 +68,20 @@ uv run python examples/toy-model/main.py
 The first run creates a virtual environment and installs QUACS and NumPy into it.
 
 The model prints a header and one row per timestep, with the step number and the
-domain means of temperature, ozone, and surface ozone flux. You should see:
+domain means of temperature, ozone, and surface ozone flux, followed by each column's
+net heating from the last timestep. You should see:
 ```sh
 step    mean T (K)       mean O3    mean O3 flux
-   1      290.2095      0.036737        0.000475
-   2      290.4188      0.068639        0.000880
-   3      290.6279      0.096380        0.001225
-   4      290.8367      0.120528        0.001520
-   5      291.0454      0.141568        0.001772
+   1      290.0222      0.036713        0.000475
+column heating (K): [0.375 0.75  1.125 1.5  ]
+   2      290.0444      0.068574        0.000879
+column heating (K): [0.375 0.75  1.125 1.5  ]
+   3      290.0665      0.096257        0.001224
+column heating (K): [0.375 0.75  1.125 1.5  ]
+   4      290.0886      0.120335        0.001517
+column heating (K): [0.375 0.75  1.125 1.5  ]
+   5      290.1107      0.141296        0.001769
+column heating (K): [0.375 0.75  1.125 1.5  ]
 ```
 
 ## Limitations

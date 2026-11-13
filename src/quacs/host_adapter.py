@@ -29,6 +29,10 @@ class HostAdapter(Protocol):
 
         `func` is called with one `Variable` per name in `host_names`, in the same order.
         No guarantee is made of the order cells are operated on.
+
+        If any named variable has one value per grid cell, variables with one value per
+        column are read-only: their `set` must raise `ReadOnlyVariableError`. If every
+        named variable has one value per column, `func` is applied once per column.
         """
         ...
 

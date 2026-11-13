@@ -23,7 +23,10 @@ class Variable(Protocol):
         ...
 
     def set(self, value: float) -> None:
-        """Writes `value` directly to the host's storage for the variable."""
+        """Writes `value` directly to the host's storage for the variable.
+        
+        Raises `ReadOnlyVariableError` if the function is not allowed to set the variable.
+        """
         ...
 
 

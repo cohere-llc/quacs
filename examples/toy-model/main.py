@@ -41,6 +41,7 @@ def main() -> None:
         runtime.run_hook("after_dynamics")
         mean_t, mean_o3, mean_flux = (host.array(name).mean() for name in DIAGNOSTICS)
         print(f"{step:>4}  {mean_t:>12.4f}  {mean_o3:>12.6f}  {mean_flux:>14.6f}")
+        print("column heating (K):", host.array("column_heating"))
 
 
 if __name__ == "__main__":

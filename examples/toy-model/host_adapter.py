@@ -3,9 +3,9 @@
 """Host adapter for the Toy Model.
 
 The toy host stores every variable as a NumPy array: `(NCOLUMNS, NLEVELS)` for
-`GridShape.CELL`, and `(NCOLUMNS,)` for `GridShape.SURFACE_CELL` and
-`GridShape.MODEL_TOP_CELL`. Level index 0 is the model top. None of this is visible to
-QUACS or to parameterizations.
+`GridShape.CELL`, and `(NCOLUMNS,)` for `GridShape.SURFACE_CELL`,
+`GridShape.MODEL_TOP_CELL` and `GridShape.COLUMN`. Level index 0 is the model top. None
+of this is visible to QUACS or to parameterizations.
 """
 
 from __future__ import annotations
@@ -16,7 +16,12 @@ from typing import Literal
 import numpy as np
 
 from quacs import VariableSpec
-from quacs.exceptions import OverwriteVariableError, UnknownVariableError, VariableNotFoundError
+from quacs.exceptions import (
+    OverwriteVariableError,
+    ReadOnlyVariableError,
+    UnknownVariableError,
+    VariableNotFoundError,
+)
 from quacs.shapes import GridShape
 from quacs.variables import Permissions
 
@@ -30,6 +35,7 @@ _SIZES: dict[GridShape, tuple[int, ...]] = {
     GridShape.CELL: (NCOLUMNS, NLEVELS),
     GridShape.SURFACE_CELL: (NCOLUMNS,),
     GridShape.MODEL_TOP_CELL: (NCOLUMNS,),
+    GridShape.COLUMN: (NCOLUMNS,),
 }
 
 
@@ -73,15 +79,30 @@ class _ToyColumn:
 class _ToyVariable:
     """One toy model variable at the selected grid cell of a column."""
 
-    def __init__(self, array: np.ndarray, column: _ToyColumn, level_resolved: bool) -> None:
+    def __init__(
+        self,
+        name: str,
+        array: np.ndarray,
+        column: _ToyColumn,
+        level_resolved: bool,
+        read_only: bool,
+    ) -> None:
+        self._name = name
         self._array = array
         self._column = column
         self._level_resolved = level_resolved
+        self._read_only = read_only
 
     def get(self) -> float:
         return float(self._array[self._index()])
 
     def set(self, value: float) -> None:
+        if self._read_only:
+            raise ReadOnlyVariableError(
+                self._name,
+                "it has one value per column and this function is applied to every grid "
+                "cell. Use for_each_column to set it.",
+            )
         self._array[self._index()] = value
 
     def _index(self) -> tuple[int, ...]:
@@ -100,25 +121,25 @@ class ToyHostAdapter:
         self._arrays: dict[str, np.ndarray] = {
             "t_host": np.full(_size(GridShape.CELL), 290.0),
             "surface_wind_speed": np.full(_size(GridShape.SURFACE_CELL), 3.0),
+            "cos_solar_zenith_angle": np.linspace(0.25, 1.0, NCOLUMNS),
         }
         self._shapes: dict[str, GridShape] = {
             "t_host": GridShape.CELL,
             "surface_wind_speed": GridShape.SURFACE_CELL,
+            "cos_solar_zenith_angle": GridShape.COLUMN,
         }
 
     def canonical_name_map(self) -> dict[str, str | None]:
         return {"temperature": "t_host"}
 
     def for_each_cell(self, func: Callable[..., None], *host_names: str) -> None:
+        self._check_known(host_names)
+        # If any variable has one value per grid cell, the function is applied to every
+        # grid cell, and variables with one value per column can only be read.
+        per_grid_cell = any(self._shapes[name].is_level_resolved for name in host_names)
         column = _ToyColumn()
-        variables = self._variables(host_names, column)
-        level_resolved = {self._shapes[name].is_level_resolved for name in host_names}
-        if len(level_resolved) != 1:
-            raise ValueError(
-                "The toy host requires the variables in a for_each_cell call to be either "
-                f"all per grid cell or all per column: {', '.join(host_names)}"
-            )
-        levels = range(NLEVELS) if level_resolved.pop() else range(1)
+        variables = self._variables(host_names, column, lock_column_values=per_grid_cell)
+        levels = range(NLEVELS) if per_grid_cell else range(1)
         for index in range(NCOLUMNS):
             for level in levels:
                 column.index = index
@@ -131,8 +152,9 @@ class ToyHostAdapter:
         *host_names: str,
         start: Literal["surface", "model_top"] = "surface",
     ) -> None:
+        self._check_known(host_names)
         column = _ToyColumn()
-        variables = self._variables(host_names, column)
+        variables = self._variables(host_names, column, lock_column_values=False)
         start_level = _SURFACE_LEVEL if start == "surface" else _MODEL_TOP_LEVEL
         for index in range(NCOLUMNS):
             column.index = index
@@ -166,11 +188,25 @@ class ToyHostAdapter:
         """Host-side access to a variable, for the toy model's own code and diagnostics."""
         return self._arrays[host_name]
 
-    def _variables(self, host_names: tuple[str, ...], column: _ToyColumn) -> list[_ToyVariable]:
+    def _check_known(self, host_names: tuple[str, ...]) -> None:
         for name in host_names:
             if name not in self._arrays:
                 raise UnknownVariableError(name, list(self._arrays))
-        return [
-            _ToyVariable(self._arrays[name], column, self._shapes[name].is_level_resolved)
-            for name in host_names
-        ]
+
+    def _variables(
+        self, host_names: tuple[str, ...], column: _ToyColumn, lock_column_values: bool
+    ) -> list[_ToyVariable]:
+        variables = []
+        for name in host_names:
+            level_resolved = self._shapes[name].is_level_resolved
+            variables.append(
+                _ToyVariable(
+                    name,
+                    self._arrays[name],
+                    column,
+                    level_resolved,
+                    read_only=lock_column_values and not level_resolved,
+                )
+            )
+        return variables
+    

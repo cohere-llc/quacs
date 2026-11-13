@@ -16,7 +16,8 @@ from quacs.variables import Permissions
 
 
 class HeatingScheme:
-    """Raises `temperature` by a fixed amount in every grid cell."""
+    """Raises `temperature` in every grid cell, in proportion to the sunlight on its column,
+    and records the net heating of each column."""
 
     name = "heating"
 
@@ -32,16 +33,47 @@ class HeatingScheme:
                 units="K",
                 description="Air temperature",
                 permissions=Permissions.UPDATE,
-            )
+            ),
+            VariableSpec(
+                name="cos_solar_zenith_angle",
+                shape=GridShape.COLUMN,
+                dtype="float",
+                units="1",
+                description="Cosine of the solar zenith angle",
+                permissions=Permissions.READ_ONLY,
+            ),
+            VariableSpec(
+                name="column_heating",
+                shape=GridShape.COLUMN,
+                dtype="float",
+                units="K",
+                description="Temperature increase summed over the grid cells of the column",
+                permissions=Permissions.OWN,
+            ),
         ]
 
     def run(self, state: QuacsState) -> None:
         rate = self._rate_per_call
 
-        def heat(temperature: Variable) -> None:
-            temperature.set(temperature.get() + rate)
+        def heat(
+            column: Column,
+            temperature: Variable,
+            cos_solar_zenith_angle: Variable,
+            column_heating: Variable,
+        ) -> None:
+            net_heating = 0.0
+            while True:
+                heating = rate * cos_solar_zenith_angle.get()
+                temperature.set(temperature.get() + heating)
+                net_heating += heating
+                if column.at_surface():
+                    break
+                column.step_toward_surface()
+            column_heating.set(net_heating)
 
-        state.for_each_cell(heat, "temperature")
+        state.for_each_column(
+            heat, "temperature", "cos_solar_zenith_angle", "column_heating", start="model_top"
+        )
 
 
 class OzoneChemistry:

@@ -29,6 +29,14 @@ class UnknownVariableError(QuacsError):
         super().__init__(self.message)
 
 
+class ReadOnlyVariableError(QuacsError):
+    """Raised when a function sets a variable it is only allowed to read."""
+
+    def __init__(self, name: str, reason: str) -> None:
+        self.message = f"Variable '{name}' cannot be set: {reason}"
+        super().__init__(self.message)
+
+
 class UnknownHookLabelError(QuacsError):
     """Raised when run_hook() is called with a label unknown to the host config."""
 

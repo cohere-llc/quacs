@@ -30,6 +30,10 @@ class QuacsState:
 
         `func` is called with one `Variable` per name in `names`, in the same order.
         No guarantee is made as to the order grid cells are operated on.
+
+        A variable with one value per column can be read in every grid cell of its column,
+        but cannot be set alongside variables that have one value per grid cell. Use
+        `for_each_column` to set it.
         """
         self._host_adapter.for_each_cell(func, *self._host_names(names))
 
