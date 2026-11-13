@@ -8,11 +8,10 @@ and be versioned with the host application.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import Literal, Protocol, runtime_checkable
 
-import numpy as np
-
-from quacs.shapes import GridShape
+from quacs.accessors import Cell, Column
 
 
 @runtime_checkable
@@ -27,11 +26,23 @@ class HostAdapter(Protocol):
         """
         ...
 
-    def shape_sizes(self) -> dict[GridShape, tuple[int, ...]]:
-        """Return the array shape and dimension sizes that correspond to each
-        `GridShape`, for the host applications current configuration."""
+    def for_each_cell(self, func: Callable[[Cell], None], *host_names: str) -> None:
+        """Applies func to each cell in the model grid.
+        
+        No guarantee is made of the order cells are operated on.
+        """
         ...
 
-    def get_array(self, host_name: str) -> np.ndarray:
-        """Return a zero-copy NumPy view of the named host variable."""
+    def for_each_column(
+        self,
+        func: Callable[[Column], None],
+        *host_names: str,
+        start: Literal["surface", "model_top"] = "surface",
+    ) -> None:
+        """Applied func to each column in the model grid.
+        
+        The column's selected vertical cell start with `start` and can be advanced with
+        the `step_toward_surface` and `step_toward_model_top` itertor functions.
+        No guarantee is made of the order columns are operated on.
+        """
         ...

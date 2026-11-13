@@ -20,3 +20,8 @@ class GridShape(Enum):
     INTERFACE = auto()  # one value for every horizontal cell boundary (including the surface and model top) in every column
     SURFACE_CELL = auto()  # one value per column
     MODEL_TOP_CELL = auto()  # one value per column
+
+    @property
+    def is_level_resolved(self) -> bool:
+        return self in (GridShape.CELL, GridShape.INTERFACE)
+    

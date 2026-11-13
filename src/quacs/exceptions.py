@@ -21,6 +21,13 @@ class OverwriteVariableError(QuacsError):
         super().__init__(self.message)
 
 
+class UnknownVariableError(QuacsError):
+    """Raised when a variable is requested that does not exist in the QUACS state."""
+
+    def __init__(self, name: str, known_variables: list[str]) -> None:
+        self.message = f"Variable '{name}' is not present in the list of known variables: {', '.join(known_variables)}"
+        super().__init__(self.message)
+
 class UnknownHookLabelError(QuacsError):
     """Raised when run_hook() is called with a label unknown to the host config."""
 

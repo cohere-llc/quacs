@@ -37,7 +37,7 @@ class HookDispatcher:
             hooks: mapping of hook label -> ordered list of parameterization names
                 to run when that label fires.
         """
-        for param in itertools.chain(hooks.values()):
+        for param in itertools.chain(*hooks.values()):
             if param not in registry:
                 raise UnknownParameterizationError(param)
         self._hooks = {
