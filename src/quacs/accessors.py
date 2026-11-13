@@ -6,31 +6,29 @@ from __future__ import annotations
 
 from typing import Protocol
 
-import numpy as np
 
-type Value = float | np.ndarray
+class Variable(Protocol):
+    """One variable in one grid cell.
 
+    In a `for_each_cell` function, the grid cell is the one the function is being applied
+    to. In a `for_each_column` function, it is the column's currently selected grid cell.
+    A variable with one value per column has that value regardless of the selected cell.
+    """
 
-class Cell(Protocol):
-    """A single grid cell."""
-    def get(self, name: str) -> Value:
-        """Gets a named value for a grid cell."""
+    def get(self) -> float:
+        """Returns the value of the variable.
+
+        The returned number is a copy. Changing it does not change the host variable.
+        """
         ...
 
-    def set(self, name: str, value: Value) -> None:
-        """Sets the value of a name grid cell variable."""
+    def set(self, value: float) -> None:
+        """Writes `value` directly to the host's storage for the variable."""
         ...
 
 
 class Column(Protocol):
-    """A column of vertically stacked grid cells."""
-    def get(self, name: str) -> Value:
-        """Gets the value of a named variable in the currently selected grid cell in the column."""
-        ...
-
-    def set(self, name: str, value: Value) -> None:
-        """Sets the value of a named variable in the currently selected grid cell in the column."""
-        ...
+    """A column of vertically stacked grid cells, one of which is selected."""
 
     def step_toward_surface(self, count: int = 1) -> None:
         """Advance the selected grid cell toward the surface by `count` cells."""
@@ -49,7 +47,7 @@ class Column(Protocol):
         ...
 
     def at_surface(self, buffer: int = 0) -> bool:
-        """Returned whether the selected cell is within `buffer` cells of the cell nearest the surface."""
+        """Returns whether the selected cell is within `buffer` cells of the cell nearest the surface."""
         ...
 
     def at_model_top(self, buffer: int = 0) -> bool:

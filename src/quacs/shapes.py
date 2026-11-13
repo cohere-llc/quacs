@@ -24,4 +24,3 @@ class GridShape(Enum):
     @property
     def is_level_resolved(self) -> bool:
         return self in (GridShape.CELL, GridShape.INTERFACE)
-    

@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """QUACS Scripting Interface for Chemistry and Aerosols."""
 
-from . import exceptions
-from . import shapes
+from . import exceptions, shapes
 from .hooks import HookDispatcher
 from .host_adapter import HostAdapter
 from .parameterization import Parameterization
@@ -14,14 +13,14 @@ from .variables import VariableSpec
 
 __version__ = "0.1.0"
 
-__all__ = {
-    "exceptions",
-    "shapes",
+__all__ = [
     "HookDispatcher",
     "HostAdapter",
     "Parameterization",
     "ParameterizationRegistry",
-    "Runtime",
     "QuacsState",
+    "Runtime",
     "VariableSpec",
-}
+    "exceptions",
+    "shapes",
+]

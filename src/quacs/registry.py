@@ -34,9 +34,11 @@ class ParameterizationRegistry:
             if var.permissions == Permissions.OWN:
                 if var.name in self._owned_variables:
                     raise OverwriteVariableError(
-                        f"Two parameterizations ('{parameterization.name}' "
-                        f"and '{self._owned_variables[var.name].requested_by}') attempting"
-                        f" to `OWN` the same variable: '{var.name}'"
+                        var.name,
+                        [
+                            self._owned_variables[var.name].requested_by or "unknown",
+                            parameterization.name,
+                        ],
                     )
                 self._owned_variables[var.name] = dataclasses.replace(
                     var, requested_by=parameterization.name

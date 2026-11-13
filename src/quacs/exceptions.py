@@ -28,6 +28,7 @@ class UnknownVariableError(QuacsError):
         self.message = f"Variable '{name}' is not present in the list of known variables: {', '.join(known_variables)}"
         super().__init__(self.message)
 
+
 class UnknownHookLabelError(QuacsError):
     """Raised when run_hook() is called with a label unknown to the host config."""
 
@@ -41,6 +42,7 @@ class UnknownParameterizationError(QuacsError):
 
     def __init__(self, label: str) -> None:
         self.message = f"Parameterization '{label}' does not exist in the registry."
+        super().__init__(self.message)
 
 
 class VariableNotFoundError(QuacsError):

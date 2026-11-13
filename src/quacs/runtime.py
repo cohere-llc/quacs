@@ -8,8 +8,8 @@ from quacs.hooks import HookDispatcher
 from quacs.host_adapter import HostAdapter
 from quacs.parameterization import Parameterization
 from quacs.registry import ParameterizationRegistry
-from quacs.variables import VariableSpec
 from quacs.state import QuacsState
+from quacs.variables import VariableSpec
 
 
 class Runtime:
