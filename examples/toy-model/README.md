@@ -12,9 +12,13 @@ A small pure-Python "host model" that runs three toy parameterizations through Q
 - `parameterizations.py`: three parameterizations that know nothing about the toy model.
   - `HeatingScheme` raises `temperature` in every grid cell, in proportion to the
     sunlight on its column, and records each column's net heating in `column_heating`.
-  - `OzoneChemistry` creates `ozone` and works down each column from the model top.
-  - `SurfaceDeposition` creates `surface_ozone_flux` from the ozone nearest the surface
-    and the toy model's `surface_wind_speed`.
+  - `OzoneChemistry` calculates the actinic flux at every interface in `actinic_flux`,
+    working down each column from the model top, then produces and removes `ozone` in
+    every grid cell. It records the flux absorbed in each grid cell in `absorbed_flux`.
+  - `SurfaceDeposition` calculates the downward ozone flux at every interface in
+    `ozone_flux`: mixing between grid cells, and deposition at the surface using the toy
+    model's `surface_wind_speed`. It records the flux at the surface in
+    `surface_ozone_flux` and at the model top in `model_top_ozone_flux`.
 
 ## Hooks
 
@@ -31,10 +35,10 @@ Between the two hooks the toy model does its own work, a small cooling of `t_hos
 
 When parameterizations need to access host state data, they pass a function to
 `state.for_each_cell` or `state.for_each_column`, along with the names of the variables
-needs access to. The function receives one accessor per name, in the same order, and
+it needs access to. The function receives one accessor per name, in the same order, and
 reads and writes each variable with `get()` and `set(value)`. Column functions receive
 the column with a specified selected level. The `step_toward_surface` and
-`step_toward_model_top` functions can be used to advance one or steps at a time
+`step_toward_model_top` functions can be used to advance one or more steps at a time
 vertically. Functions like `at_model_top` or `at_surface` can be used to determine
 the current location of the selected level.
 
@@ -67,21 +71,35 @@ uv run python examples/toy-model/main.py
 
 The first run creates a virtual environment and installs QUACS and NumPy into it.
 
-The model prints a header and one row per timestep, with the step number and the
-domain means of temperature, ozone, and surface ozone flux, followed by each column's
-net heating from the last timestep. You should see:
+The toy model prints out a domain-average time series, final column averages, and
+final vertical interface and mid-point averages. You should see:
 ```sh
-step    mean T (K)       mean O3    mean O3 flux
-   1      290.0222      0.036713        0.000475
-column heating (K): [0.375 0.75  1.125 1.5  ]
-   2      290.0444      0.068574        0.000879
-column heating (K): [0.375 0.75  1.125 1.5  ]
-   3      290.0665      0.096257        0.001224
-column heating (K): [0.375 0.75  1.125 1.5  ]
-   4      290.0886      0.120335        0.001517
-column heating (K): [0.375 0.75  1.125 1.5  ]
-   5      290.1107      0.141296        0.001769
-column heating (K): [0.375 0.75  1.125 1.5  ]
+QUACS toy model: 4 columns x 3 levels, 5 timesteps
+
+Domain means after each timestep
+  step     T (K)        O3  surface O3 flux
+  1     290.0222  0.036713         0.000475
+  2     290.0444  0.068574         0.000879
+  3     290.0665  0.096257         0.001224
+  4     290.0886  0.120335         0.001517
+  5     290.1107  0.141296         0.001769
+
+Each column after the last timestep
+  column  cos(SZA)  heating (K)  surface O3 flux  model top O3 flux
+  1         0.2500       0.3750         0.001765           0.000000
+  2         0.5000       0.7500         0.001768           0.000000
+  3         0.7500       1.1250         0.001770           0.000000
+  4         1.0000       1.5000         0.001772           0.000000
+
+Column 1 after the last timestep, from the model top down
+                T (K)        O3  absorbed flux  actinic flux   O3 flux
+  model top                                         1.000000  0.000000
+  cell 1     289.1760  0.146376       0.065479                        
+  interface                                         0.934521  0.000548
+  cell 2     289.1760  0.140898       0.059187                        
+  interface                                         0.875334  0.000510
+  cell 3     289.1760  0.135797       0.053674                        
+  surface                                           0.821660  0.001765
 ```
 
 ## Limitations

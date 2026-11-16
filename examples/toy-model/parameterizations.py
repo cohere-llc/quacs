@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 
 from quacs import QuacsState, VariableSpec
-from quacs.accessors import Column, Variable
+from quacs.accessors import Column, InterfaceVariable, Variable, above, below, lower, upper
 from quacs.shapes import GridShape
 from quacs.variables import Permissions
 
@@ -55,32 +55,32 @@ class HeatingScheme:
     def run(self, state: QuacsState) -> None:
         rate = self._rate_per_call
 
-        def heat(
-            column: Column,
-            temperature: Variable,
-            cos_solar_zenith_angle: Variable,
-            column_heating: Variable,
+        def heat(temperature: Variable, cos_solar_zenith_angle: Variable) -> None:
+            temperature.set(temperature.get() + rate * cos_solar_zenith_angle.get())
+
+        def total_heating(
+            column: Column, cos_solar_zenith_angle: Variable, column_heating: Variable
         ) -> None:
             net_heating = 0.0
             while True:
-                heating = rate * cos_solar_zenith_angle.get()
-                temperature.set(temperature.get() + heating)
-                net_heating += heating
-                if column.at_surface():
+                net_heating += rate * cos_solar_zenith_angle.get()
+                if column.at_model_top():
                     break
-                column.step_toward_surface()
+                column.step_toward_model_top()
             column_heating.set(net_heating)
 
+        state.for_each_cell(heat, "temperature", "cos_solar_zenith_angle")
         state.for_each_column(
-            heat, "temperature", "cos_solar_zenith_angle", "column_heating", start="model_top"
+            total_heating, "cos_solar_zenith_angle", "column_heating", start="surface"
         )
 
 
 class OzoneChemistry:
-    """Produces and removes `ozone`, working down each column from the model top.
+    """Produces and removes `ozone` in every grid cell.
 
     Production is driven by an actinic flux that is attenuated by the ozone in each cell
-    it passes through, so each cell depends on the cells above it.
+    it passes through. The flux is calculated at the interfaces between cells, working
+    down each column from the model top.
     """
 
     name = "ozone_chemistry"
@@ -106,6 +106,22 @@ class OzoneChemistry:
                 permissions=Permissions.OWN,
             ),
             VariableSpec(
+                name="actinic_flux",
+                shape=GridShape.INTERFACE,
+                dtype="float",
+                units="1",
+                description="Actinic flux relative to the flux at the model top",
+                permissions=Permissions.OWN,
+            ),
+            VariableSpec(
+                name="absorbed_flux",
+                shape=GridShape.CELL,
+                dtype="float",
+                units="1",
+                description="Actinic flux absorbed in the grid cell",
+                permissions=Permissions.OWN,
+            ),
+            VariableSpec(
                 name="temperature",
                 shape=GridShape.CELL,
                 dtype="float",
@@ -120,36 +136,78 @@ class OzoneChemistry:
         loss_fraction = self._loss_fraction
         attenuation = self._attenuation
 
-        def react(column: Column, ozone: Variable, temperature: Variable) -> None:
-            actinic_flux = 1.0
+        def attenuate(
+            column: Column,
+            ozone: Variable,
+            upper_flux: InterfaceVariable,
+            lower_flux: InterfaceVariable,
+        ) -> None:
+            upper_flux.set(1.0)
             while True:
-                current = ozone.get()
-                actinic_flux = actinic_flux * math.exp(-attenuation * current)
-                production = production_rate * actinic_flux * temperature.get() / 290.0
-                ozone.set((current + production) * (1.0 - loss_fraction))
+                lower_flux.set(upper_flux.get() * math.exp(-attenuation * ozone.get()))
                 if column.at_surface():
                     break
                 column.step_toward_surface()
 
-        state.for_each_column(react, "ozone", "temperature", start="model_top")
+        def react(
+            ozone: Variable,
+            temperature: Variable,
+            absorbed_flux: Variable,
+            upper_flux: InterfaceVariable,
+            lower_flux: InterfaceVariable,
+        ) -> None:
+            current = ozone.get()
+            production = production_rate * lower_flux.get() * temperature.get() / 290.0
+            ozone.set((current + production) * (1.0 - loss_fraction))
+            absorbed_flux.set(upper_flux.get() - lower_flux.get())
+
+        state.for_each_column(
+            attenuate, "ozone", upper("actinic_flux"), lower("actinic_flux"), start="model_top"
+        )
+        state.for_each_cell(
+            react,
+            "ozone",
+            "temperature",
+            "absorbed_flux",
+            upper("actinic_flux"),
+            lower("actinic_flux"),
+        )
 
 
 class SurfaceDeposition:
-    """Calculates `surface_ozone_flux` from ozone in the cell nearest the surface."""
+    """Calculates the downward flux of ozone through every interface: mixing between grid
+    cells, and deposition at the surface."""
 
     name = "surface_deposition"
 
-    def __init__(self, deposition_velocity: float = 0.01) -> None:
+    def __init__(self, deposition_velocity: float = 0.01, mixing_rate: float = 0.1) -> None:
         self._deposition_velocity = deposition_velocity
+        self._mixing_rate = mixing_rate
 
     def register_variables(self) -> list[VariableSpec]:
         return [
+            VariableSpec(
+                name="ozone_flux",
+                shape=GridShape.INTERFACE,
+                dtype="float",
+                units="mol m-2 s-1",
+                description="Downward ozone flux",
+                permissions=Permissions.OWN,
+            ),
             VariableSpec(
                 name="surface_ozone_flux",
                 shape=GridShape.SURFACE_CELL,
                 dtype="float",
                 units="mol m-2 s-1",
                 description="Downward ozone deposition flux at the surface",
+                permissions=Permissions.OWN,
+            ),
+            VariableSpec(
+                name="model_top_ozone_flux",
+                shape=GridShape.MODEL_TOP_CELL,
+                dtype="float",
+                units="mol m-2 s-1",
+                description="Downward ozone flux at the model top",
                 permissions=Permissions.OWN,
             ),
             VariableSpec(
@@ -172,10 +230,44 @@ class SurfaceDeposition:
 
     def run(self, state: QuacsState) -> None:
         deposition_velocity = self._deposition_velocity
+        mixing_rate = self._mixing_rate
 
-        def deposit(column: Column, ozone: Variable, wind_speed: Variable, flux: Variable) -> None:
-            flux.set(deposition_velocity * (1.0 + 0.1 * wind_speed.get()) * ozone.get())
+        def calculate_flux(
+            ozone_flux: InterfaceVariable,
+            ozone_above: Variable | None,
+            ozone_below: Variable | None,
+            wind_speed: Variable,
+        ) -> None:
+            if ozone_above is None:
+                # Nothing enters through the model top.
+                ozone_flux.set(0.0)
+            elif ozone_below is None:
+                # Deposition at the surface.
+                ozone_flux.set(
+                    deposition_velocity * (1.0 + 0.1 * wind_speed.get()) * ozone_above.get()
+                )
+            else:
+                ozone_flux.set(mixing_rate * (ozone_above.get() - ozone_below.get()))
 
+        def record_boundaries(
+            column: Column,
+            upper_flux: InterfaceVariable,
+            lower_flux: InterfaceVariable,
+            surface_flux: Variable,
+            model_top_flux: Variable,
+        ) -> None:
+            column.select_model_top()
+            model_top_flux.set(upper_flux.get())
+            column.select_surface_cell()
+            surface_flux.set(lower_flux.get())
+
+        state.for_each_interface(
+            calculate_flux, "ozone_flux", above("ozone"), below("ozone"), "surface_wind_speed"
+        )
         state.for_each_column(
-            deposit, "ozone", "surface_wind_speed", "surface_ozone_flux", start="surface"
+            record_boundaries,
+            upper("ozone_flux"),
+            lower("ozone_flux"),
+            "surface_ozone_flux",
+            "model_top_ozone_flux",
         )

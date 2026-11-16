@@ -3,9 +3,13 @@
 """Host adapter for the Toy Model.
 
 The toy host stores every variable as a NumPy array: `(NCOLUMNS, NLEVELS)` for
-`GridShape.CELL`, and `(NCOLUMNS,)` for `GridShape.SURFACE_CELL`,
-`GridShape.MODEL_TOP_CELL` and `GridShape.COLUMN`. Level index 0 is the model top. None
-of this is visible to QUACS or to parameterizations.
+`GridShape.CELL`, `(NCOLUMNS, NLEVELS + 1)` for `GridShape.INTERFACE`, and `(NCOLUMNS,)`
+for `GridShape.SURFACE_CELL`, `GridShape.MODEL_TOP_CELL` and `GridShape.COLUMN`. Level
+index 0 is the model top, and interface `k` is the upper interface of grid cell `k`.
+
+This is intended to demonstrate that host applications can implment QUACS using their
+native state data structures, and that parameterizations are agnostic to the host's
+data layout.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from typing import Literal
 import numpy as np
 
 from quacs import VariableSpec
+from quacs.accessors import Adjacent
 from quacs.exceptions import (
     OverwriteVariableError,
     ReadOnlyVariableError,
@@ -33,9 +38,35 @@ _SURFACE_LEVEL = NLEVELS - 1
 
 _SIZES: dict[GridShape, tuple[int, ...]] = {
     GridShape.CELL: (NCOLUMNS, NLEVELS),
+    GridShape.INTERFACE: (NCOLUMNS, NLEVELS + 1),
     GridShape.SURFACE_CELL: (NCOLUMNS,),
     GridShape.MODEL_TOP_CELL: (NCOLUMNS,),
     GridShape.COLUMN: (NCOLUMNS,),
+}
+
+# How a variable with one value per grid cell or per interface must be named in each
+# operation. Every other variable is named without a selector.
+_SELECTORS: dict[tuple[str, GridShape], tuple[str | None, ...]] = {
+    ("cell", GridShape.CELL): (None,),
+    ("cell", GridShape.INTERFACE): ("upper", "lower"),
+    ("column", GridShape.CELL): (None,),
+    ("column", GridShape.INTERFACE): ("upper", "lower"),
+    ("interface", GridShape.CELL): ("above", "below"),
+    ("interface", GridShape.INTERFACE): (None,),
+}
+
+# Level index of a variable relative to the selected grid cell or interface.
+_LEVEL_OFFSETS: dict[str | None, int] = {None: 0, "upper": 0, "lower": 1, "above": -1, "below": 0}
+
+_READ_ONLY_REASONS = {
+    "cell": (
+        "this function is applied to every grid cell, where only variables with one value "
+        "per grid cell can be set. Use for_each_column to set it."
+    ),
+    "interface": (
+        "this function is applied to every interface, where only variables with one value "
+        "per interface can be set. Use for_each_column to set it."
+    ),
 }
 
 
@@ -43,6 +74,10 @@ def _size(shape: GridShape) -> tuple[int, ...]:
     if shape not in _SIZES:
         raise NotImplementedError(f"The toy host does not support {shape.name} variables.")
     return _SIZES[shape]
+
+
+def _name(variable: str | Adjacent) -> str:
+    return variable.name if isinstance(variable, Adjacent) else variable
 
 
 class _ToyColumn:
@@ -77,44 +112,46 @@ class _ToyColumn:
 
 
 class _ToyVariable:
-    """One toy model variable at the selected grid cell of a column."""
+    """One toy model variable at a location relative to the selected grid cell or interface."""
 
     def __init__(
         self,
         name: str,
         array: np.ndarray,
-        column: _ToyColumn,
-        level_resolved: bool,
-        read_only: bool,
+        position: _ToyColumn,
+        level_offset: int | None,
+        read_only_reason: str | None,
     ) -> None:
         self._name = name
         self._array = array
-        self._column = column
-        self._level_resolved = level_resolved
-        self._read_only = read_only
+        self._position = position
+        self._level_offset = level_offset
+        self._read_only_reason = read_only_reason
 
     def get(self) -> float:
         return float(self._array[self._index()])
 
     def set(self, value: float) -> None:
-        if self._read_only:
-            raise ReadOnlyVariableError(
-                self._name,
-                "it has one value per column and this function is applied to every grid "
-                "cell. Use for_each_column to set it.",
-            )
+        if self._read_only_reason is not None:
+            raise ReadOnlyVariableError(self._name, self._read_only_reason)
         self._array[self._index()] = value
 
+    def exists(self) -> bool:
+        """Whether there is a grid cell or interface at the variable's location."""
+        if self._level_offset is None:
+            return True
+        return 0 <= self._position.level + self._level_offset < self._array.shape[1]
+
     def _index(self) -> tuple[int, ...]:
-        if self._level_resolved:
-            return (self._column.index, self._column.level)
-        return (self._column.index,)
+        if self._level_offset is None:
+            return (self._position.index,)
+        return (self._position.index, self._position.level + self._level_offset)
 
 
 class ToyHostAdapter:
     """Toy Host Model adapter.
 
-    Parameterization functions are called once per grid cell or once per column.
+    Parameterization functions are called once per grid cell, column, or interface.
     """
 
     def __init__(self) -> None:
@@ -132,34 +169,41 @@ class ToyHostAdapter:
     def canonical_name_map(self) -> dict[str, str | None]:
         return {"temperature": "t_host"}
 
-    def for_each_cell(self, func: Callable[..., None], *host_names: str) -> None:
-        self._check_known(host_names)
-        # If any variable has one value per grid cell, the function is applied to every
-        # grid cell, and variables with one value per column can only be read.
-        per_grid_cell = any(self._shapes[name].is_level_resolved for name in host_names)
-        column = _ToyColumn()
-        variables = self._variables(host_names, column, lock_column_values=per_grid_cell)
-        levels = range(NLEVELS) if per_grid_cell else range(1)
+    def for_each_cell(self, func: Callable[..., None], *variables: str | Adjacent) -> None:
+        self._check_known(variables)
+        position = _ToyColumn()
+        accessors = self._accessors(variables, position, "cell", GridShape.CELL)
         for index in range(NCOLUMNS):
-            for level in levels:
-                column.index = index
-                column.level = level
-                func(*variables)
+            for level in range(NLEVELS):
+                position.index = index
+                position.level = level
+                func(*accessors)
 
     def for_each_column(
         self,
         func: Callable[..., None],
-        *host_names: str,
+        *variables: str | Adjacent,
         start: Literal["surface", "model_top"] = "surface",
     ) -> None:
-        self._check_known(host_names)
+        self._check_known(variables)
         column = _ToyColumn()
-        variables = self._variables(host_names, column, lock_column_values=False)
+        accessors = self._accessors(variables, column, "column", None)
         start_level = _SURFACE_LEVEL if start == "surface" else _MODEL_TOP_LEVEL
         for index in range(NCOLUMNS):
             column.index = index
             column.level = start_level
-            func(column, *variables)
+            func(column, *accessors)
+
+    def for_each_interface(self, func: Callable[..., None], *variables: str | Adjacent) -> None:
+        self._check_known(variables)
+        # Here the position's level is an interface index, not a grid cell index.
+        position = _ToyColumn()
+        accessors = self._accessors(variables, position, "interface", GridShape.INTERFACE)
+        for index in range(NCOLUMNS):
+            for interface in range(NLEVELS + 1):
+                position.index = index
+                position.level = interface
+                func(*(accessor if accessor.exists() else None for accessor in accessors))
 
     def allocate_registered_variables(self, specs: list[VariableSpec]) -> None:
         """Create variables owned by parameterizations and check the rest exist.
@@ -188,25 +232,41 @@ class ToyHostAdapter:
         """Host-side access to a variable, for the toy model's own code and diagnostics."""
         return self._arrays[host_name]
 
-    def _check_known(self, host_names: tuple[str, ...]) -> None:
-        for name in host_names:
-            if name not in self._arrays:
-                raise UnknownVariableError(name, list(self._arrays))
+    def _check_known(self, variables: tuple[str | Adjacent, ...]) -> None:
+        for variable in variables:
+            if _name(variable) not in self._arrays:
+                raise UnknownVariableError(_name(variable), list(self._arrays))
 
-    def _variables(
-        self, host_names: tuple[str, ...], column: _ToyColumn, lock_column_values: bool
+    def _accessors(
+        self,
+        variables: tuple[str | Adjacent, ...],
+        position: _ToyColumn,
+        operation: str,
+        settable: GridShape | None,
     ) -> list[_ToyVariable]:
-        variables = []
-        for name in host_names:
-            level_resolved = self._shapes[name].is_level_resolved
-            variables.append(
+        """Build one accessor per variable. If `settable` is given, only variables of that
+        shape can be set."""
+        accessors = []
+        for variable in variables:
+            name = _name(variable)
+            side = variable.side if isinstance(variable, Adjacent) else None
+            shape = self._shapes[name]
+            allowed = _SELECTORS.get((operation, shape), (None,))
+            if side not in allowed:
+                expected = " or ".join(f"{s}()" for s in allowed if s) or "no selector"
+                raise ValueError(
+                    f"In for_each_{operation}, the {shape.name} variable '{name}' must be "
+                    f"named with {expected}."
+                )
+            level_offset = _LEVEL_OFFSETS[side] if shape.is_level_resolved else None
+            read_only = settable is not None and shape is not settable
+            accessors.append(
                 _ToyVariable(
                     name,
                     self._arrays[name],
-                    column,
-                    level_resolved,
-                    read_only=lock_column_values and not level_resolved,
+                    position,
+                    level_offset,
+                    _READ_ONLY_REASONS[operation] if read_only else None,
                 )
             )
-        return variables
-    
+        return accessors
