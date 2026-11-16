@@ -52,6 +52,7 @@ def column_rows(host: ToyHostAdapter) -> list[list[str]]:
         [
             str(column + 1),
             f"{host.array('cos_solar_zenith_angle')[column]:.4f}",
+            str(bool(host.array("is_daytime")[column])),
             f"{host.array('column_heating')[column]:.4f}",
             f"{host.array('surface_ozone_flux')[column]:.6f}",
             f"{host.array('model_top_ozone_flux')[column]:.6f}",
@@ -71,6 +72,7 @@ def profile_rows(host: ToyHostAdapter, column: int) -> list[list[str]]:
                 "",
                 "",
                 "",
+                "",
                 f"{host.array('actinic_flux')[column, level]:.6f}",
                 f"{host.array('ozone_flux')[column, level]:.6f}",
             ]
@@ -82,6 +84,7 @@ def profile_rows(host: ToyHostAdapter, column: int) -> list[list[str]]:
                     f"{host.array('t_host')[column, level]:.4f}",
                     f"{host.array('ozone')[column, level]:.6f}",
                     f"{host.array('absorbed_flux')[column, level]:.6f}",
+                    str(host.array("chemistry_updates")[column, level]),
                     "",
                     "",
                 ]
@@ -109,12 +112,12 @@ def main() -> None:
     )
     print_table(
         "Each column after the last timestep",
-        ["column", "cos(SZA)", "heating (K)", "surface O3 flux", "model top O3 flux"],
+        ["column", "cos(SZA)", "daytime", "heating (K)", "surface O3 flux", "model top O3 flux"],
         column_rows(host),
     )
     print_table(
         f"Column {PROFILE_COLUMN + 1} after the last timestep, from the model top down",
-        ["", "T (K)", "O3", "absorbed flux", "actinic flux", "O3 flux"],
+        ["", "T (K)", "O3", "absorbed flux", "updates", "actinic flux", "O3 flux"],
         profile_rows(host, PROFILE_COLUMN),
     )
 

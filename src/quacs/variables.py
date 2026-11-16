@@ -14,7 +14,7 @@ from typing import Literal
 
 from quacs.shapes import GridShape
 
-DType = Literal["float", "int", "bool", "char"]
+DType = Literal["float", "int", "bool"]
 
 
 class Permissions(Enum):
@@ -58,6 +58,10 @@ class VariableSpec:
     mapping to its internal namespace (if the variable is available). When it is not a
     known QUACS name, a direct match to a host application variable will be attempted, unless
     the parameterization is decorated with a host-application-specific name mapping.
+
+    `dtype` is the type of the variable's values as parameterizations see them: Python
+    `float`, `int` or `bool`. The host application chooses the precision it uses to store
+    `float` and `int` values.
     """
 
     name: str

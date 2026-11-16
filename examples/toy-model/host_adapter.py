@@ -69,6 +69,13 @@ _READ_ONLY_REASONS = {
     ),
 }
 
+# The toy host's storage type for each QUACS data type. Precision is the host's choice.
+_STORAGE_TYPES: dict[str, np.dtype] = {
+    "float": np.dtype(np.float64),
+    "int": np.dtype(np.int32),
+    "bool": np.dtype(np.bool_),
+}
+
 
 def _size(shape: GridShape) -> tuple[int, ...]:
     if shape not in _SIZES:
@@ -78,6 +85,17 @@ def _size(shape: GridShape) -> tuple[int, ...]:
 
 def _name(variable: str | Adjacent) -> str:
     return variable.name if isinstance(variable, Adjacent) else variable
+
+
+def _matches(value: object, kind: str) -> bool:
+    """Whether a Python value has the type stored by a NumPy array of the given kind."""
+    if kind == "b":
+        return isinstance(value, bool)
+    if isinstance(value, bool):
+        return False
+    if kind == "i":
+        return isinstance(value, int)
+    return isinstance(value, (int, float))
 
 
 class _ToyColumn:
@@ -128,12 +146,18 @@ class _ToyVariable:
         self._level_offset = level_offset
         self._read_only_reason = read_only_reason
 
-    def get(self) -> float:
-        return float(self._array[self._index()])
+    def get(self) -> float | int | bool:
+        value: float | int | bool = self._array[self._index()].item()
+        return value
 
-    def set(self, value: float) -> None:
+    def set(self, value: float | int | bool) -> None:  # noqa PYI041
         if self._read_only_reason is not None:
             raise ReadOnlyVariableError(self._name, self._read_only_reason)
+        if not _matches(value, self._array.dtype.kind):
+            raise TypeError(
+                f"Variable '{self._name}' holds {self._array.dtype} values and cannot be "
+                f"set to {value!r}."
+            )
         self._array[self._index()] = value
 
     def exists(self) -> bool:
@@ -217,7 +241,9 @@ class ToyHostAdapter:
                     raise OverwriteVariableError(
                         spec.name, ["toy host", spec.requested_by or "unknown"]
                     )
-                self._arrays[spec.name] = np.zeros(_size(spec.shape))
+                self._arrays[spec.name] = np.zeros(
+                    _size(spec.shape), dtype=_STORAGE_TYPES[spec.dtype]
+                )
                 self._shapes[spec.name] = spec.shape
         for spec in specs:
             if spec.name not in self._arrays:
@@ -226,6 +252,11 @@ class ToyHostAdapter:
                 raise ValueError(
                     f"Variable '{spec.name}' is {self._shapes[spec.name].name} in the toy "
                     f"host but was requested as {spec.shape.name}."
+                )
+            if self._arrays[spec.name].dtype != _STORAGE_TYPES[spec.dtype]:
+                raise ValueError(
+                    f"Variable '{spec.name}' is {self._arrays[spec.name].dtype} in the toy "
+                    f"host but was requested as {spec.dtype}."
                 )
 
     def array(self, host_name: str) -> np.ndarray:

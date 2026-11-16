@@ -11,10 +11,12 @@ A small pure-Python "host model" that runs three toy parameterizations through Q
   two variables of its own, `t_host`, `surface_wind_speed`, and `cos_solar_zenith_angle`.
 - `parameterizations.py`: three parameterizations that know nothing about the toy model.
   - `HeatingScheme` raises `temperature` in every grid cell, in proportion to the
-    sunlight on its column, and records each column's net heating in `column_heating`.
+    sunlight on its column. It records each column's net heating in `column_heating` and
+    whether the column is sunlit in `is_daytime`.
   - `OzoneChemistry` calculates the actinic flux at every interface in `actinic_flux`,
     working down each column from the model top, then produces and removes `ozone` in
-    every grid cell. It records the flux absorbed in each grid cell in `absorbed_flux`.
+    every grid cell. It records the flux absorbed in each grid cell in `absorbed_flux`
+    and counts its updates to each grid cell in `chemistry_updates`.
   - `SurfaceDeposition` calculates the downward ozone flux at every interface in
     `ozone_flux`: mixing between grid cells, and deposition at the surface using the toy
     model's `surface_wind_speed`. It records the flux at the surface in
@@ -58,6 +60,11 @@ grid cell of that column, but cannot set it. Use `for_each_column` to set it.
 The toy host calls each function once per grid cell or once per column in a Python
 loop. The rules above are what would let a host compile the functions instead.
 
+A variable's values are `float`, `int` or `bool`, as given by the `dtype` it is
+registered with. The host chooses the precision it stores `float` and `int` values with.
+`set(value)` needs a value of the variable's type; an `int` is also accepted for a
+`float` variable.
+
 ## Running the toy model
 
 You need [uv](https://docs.astral.sh/uv/) and Python 3.13 or later. uv can install
@@ -85,21 +92,21 @@ Domain means after each timestep
   5     290.1107  0.141296         0.001769
 
 Each column after the last timestep
-  column  cos(SZA)  heating (K)  surface O3 flux  model top O3 flux
-  1         0.2500       0.3750         0.001765           0.000000
-  2         0.5000       0.7500         0.001768           0.000000
-  3         0.7500       1.1250         0.001770           0.000000
-  4         1.0000       1.5000         0.001772           0.000000
+  column  cos(SZA)  daytime  heating (K)  surface O3 flux  model top O3 flux
+  1         0.2500     True       0.3750         0.001765           0.000000
+  2         0.5000     True       0.7500         0.001768           0.000000
+  3         0.7500     True       1.1250         0.001770           0.000000
+  4         1.0000     True       1.5000         0.001772           0.000000
 
 Column 1 after the last timestep, from the model top down
-                T (K)        O3  absorbed flux  actinic flux   O3 flux
-  model top                                         1.000000  0.000000
-  cell 1     289.1760  0.146376       0.065479                        
-  interface                                         0.934521  0.000548
-  cell 2     289.1760  0.140898       0.059187                        
-  interface                                         0.875334  0.000510
-  cell 3     289.1760  0.135797       0.053674                        
-  surface                                           0.821660  0.001765
+                T (K)        O3  absorbed flux  updates  actinic flux   O3 flux
+  model top                                                  1.000000  0.000000
+  cell 1     289.1760  0.146376       0.065479       10                        
+  interface                                                  0.934521  0.000548
+  cell 2     289.1760  0.140898       0.059187       10                        
+  interface                                                  0.875334  0.000510
+  cell 3     289.1760  0.135797       0.053674       10                        
+  surface                                                    0.821660  0.001765
 ```
 
 ## Limitations

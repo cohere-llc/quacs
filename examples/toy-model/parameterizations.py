@@ -50,6 +50,14 @@ class HeatingScheme:
                 description="Temperature increase summed over the grid cells of the column",
                 permissions=Permissions.OWN,
             ),
+            VariableSpec(
+                name="is_daytime",
+                shape=GridShape.COLUMN,
+                dtype="bool",
+                units="1",
+                description="Whether the sun is above the horizon",
+                permissions=Permissions.OWN,
+            ),
         ]
 
     def run(self, state: QuacsState) -> None:
@@ -58,8 +66,11 @@ class HeatingScheme:
         def heat(temperature: Variable, cos_solar_zenith_angle: Variable) -> None:
             temperature.set(temperature.get() + rate * cos_solar_zenith_angle.get())
 
-        def total_heating(
-            column: Column, cos_solar_zenith_angle: Variable, column_heating: Variable
+        def total_column_heating(
+            column: Column,
+            cos_solar_zenith_angle: Variable,
+            column_heating: Variable,
+            is_daytime: Variable[bool],
         ) -> None:
             net_heating = 0.0
             while True:
@@ -68,10 +79,15 @@ class HeatingScheme:
                     break
                 column.step_toward_model_top()
             column_heating.set(net_heating)
+            is_daytime.set(cos_solar_zenith_angle.get() > 0.0)
 
         state.for_each_cell(heat, "temperature", "cos_solar_zenith_angle")
         state.for_each_column(
-            total_heating, "cos_solar_zenith_angle", "column_heating", start="surface"
+            total_column_heating,
+            "cos_solar_zenith_angle",
+            "column_heating",
+            "is_daytime",
+            start="surface",
         )
 
 
@@ -129,6 +145,22 @@ class OzoneChemistry:
                 description="Air temperature",
                 permissions=Permissions.READ_ONLY,
             ),
+            VariableSpec(
+                name="chemistry_updates",
+                shape=GridShape.CELL,
+                dtype="int",
+                units="1",
+                description="Number of times chemistry has updated the grid cell",
+                permissions=Permissions.OWN,
+            ),
+            VariableSpec(
+                name="is_daytime",
+                shape=GridShape.COLUMN,
+                dtype="bool",
+                units="1",
+                description="Whether the sun is above the horizon",
+                permissions=Permissions.READ_ONLY,
+            ),
         ]
 
     def run(self, state: QuacsState) -> None:
@@ -139,10 +171,11 @@ class OzoneChemistry:
         def attenuate(
             column: Column,
             ozone: Variable,
+            is_daytime: Variable[bool],
             upper_flux: InterfaceVariable,
             lower_flux: InterfaceVariable,
         ) -> None:
-            upper_flux.set(1.0)
+            upper_flux.set(1.0 if is_daytime.get() else 0.0)
             while True:
                 lower_flux.set(upper_flux.get() * math.exp(-attenuation * ozone.get()))
                 if column.at_surface():
@@ -153,6 +186,7 @@ class OzoneChemistry:
             ozone: Variable,
             temperature: Variable,
             absorbed_flux: Variable,
+            chemistry_updates: Variable[int],
             upper_flux: InterfaceVariable,
             lower_flux: InterfaceVariable,
         ) -> None:
@@ -160,15 +194,22 @@ class OzoneChemistry:
             production = production_rate * lower_flux.get() * temperature.get() / 290.0
             ozone.set((current + production) * (1.0 - loss_fraction))
             absorbed_flux.set(upper_flux.get() - lower_flux.get())
+            chemistry_updates.set(chemistry_updates.get() + 1)
 
         state.for_each_column(
-            attenuate, "ozone", upper("actinic_flux"), lower("actinic_flux"), start="model_top"
+            attenuate,
+            "ozone",
+            "is_daytime",
+            upper("actinic_flux"),
+            lower("actinic_flux"),
+            start="model_top",
         )
         state.for_each_cell(
             react,
             "ozone",
             "temperature",
             "absorbed_flux",
+            "chemistry_updates",
             upper("actinic_flux"),
             lower("actinic_flux"),
         )

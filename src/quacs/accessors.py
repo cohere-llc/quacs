@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 
-class Variable(Protocol):
+class Variable[T = float](Protocol):
     """A variable that describes a property at the midpoint of a grid cell, of the
     grid cell as a whole, or of an entire column.
 
@@ -20,17 +20,23 @@ class Variable(Protocol):
     interface, chosen by wrapping the variable with `above()` or `below()` in the call.
     There is no grid cell above the upper-most interface or below the lower-most one.
     There, the function receives `None` in place of the `Variable`.
+
+    `T` is the Python type of the variable's values: `float`, `int`, or `bool`, matching
+    the `dtype` the variable was registered with.
     """
 
-    def get(self) -> float:
+    def get(self) -> T:
         """Returns the value of the variable.
 
         The returned number is a copy. Changing it does not change the host variable.
         """
         ...
 
-    def set(self, value: float) -> None:
+    def set(self, value: T) -> None:
         """Writes `value` directly to the host's storage for the variable.
+
+        `value` must have the variable's type, except that an `int` can be given for a
+        `float` variable. The host stores it with its own precision.
 
         Raises `ReadOnlyVariableError` if the function is not allowed to set the variable.
         """
