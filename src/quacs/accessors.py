@@ -43,7 +43,7 @@ class Variable[T = float](Protocol):
         ...
 
 
-class InterfaceVariable(Protocol):
+class InterfaceVariable[T = float](Protocol):
     """A variable that describes a property of a horizontal interface: between two grid
     cells, between the lower-most grid cell and the surface, or between the upper-most
     grid cell and space above the model top.
@@ -52,17 +52,23 @@ class InterfaceVariable(Protocol):
     applied to. In a `for_each_cell` or `for_each_column` function, it is the interface
     at the top or bottom of the grid cell, chosen by wrapping the variable with `upper()`
     or `lower()` in the call.
+
+    `T` is the Python type of the variable's values: `float`, `int`, or `bool`, matching
+    the `dtype` the variable was registered with.
     """
 
-    def get(self) -> float:
+    def get(self) -> T:
         """Returns the value of the interface variable.
 
         The returned number is a copy. Changing it does not change the host variable.
         """
         ...
 
-    def set(self, value: float) -> None:
+    def set(self, value: T) -> None:
         """Writes the `value` directly to the host's storage for the variable.
+
+        `value` must have the variable's type, except that an `int` can be given for a
+        `float` variable. The host stores in with its own precision.
 
         Raises `ReadOnlyVariableError` if the function is not allowed to set the variable.
         """

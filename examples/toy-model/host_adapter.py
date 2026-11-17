@@ -7,7 +7,7 @@ The toy host stores every variable as a NumPy array: `(NCOLUMNS, NLEVELS)` for
 for `GridShape.SURFACE_CELL`, `GridShape.MODEL_TOP_CELL` and `GridShape.COLUMN`. Level
 index 0 is the model top, and interface `k` is the upper interface of grid cell `k`.
 
-This is intended to demonstrate that host applications can implment QUACS using their
+This is intended to demonstrate that host applications can implement QUACS using their
 native state data structures, and that parameterizations are agnostic to the host's
 data layout.
 """
@@ -150,7 +150,7 @@ class _ToyVariable:
         value: float | int | bool = self._array[self._index()].item()
         return value
 
-    def set(self, value: float | int | bool) -> None:  # noqa PYI041
+    def set(self, value: float | int | bool) -> None:  # noqa: PYI041
         if self._read_only_reason is not None:
             raise ReadOnlyVariableError(self._name, self._read_only_reason)
         if not _matches(value, self._array.dtype.kind):
@@ -228,6 +228,24 @@ class ToyHostAdapter:
                 position.index = index
                 position.level = interface
                 func(*(accessor if accessor.exists() else None for accessor in accessors))
+
+    def create_variables(self, specs: list[VariableSpec]) -> None:
+        """Create every variable in `specs` that the toy host does not already have.
+        
+        For use with the QUACS profiler.
+        """
+        for spec in specs:
+            if spec.name not in self._arrays:
+                self._arrays[spec.name] = np.zeros(
+                    _size(spec.shape), dtype=_STORAGE_TYPES[spec.dtype]
+                )
+                self._shapes[spec.name] = spec.shape
+
+    def grid_cell_count(self) -> int:
+        return NCOLUMNS * NLEVELS
+
+    def domain_mean(self, host_name: str) -> float:
+        return float(self._arrays[host_name].mean())
 
     def allocate_registered_variables(self, specs: list[VariableSpec]) -> None:
         """Create variables owned by parameterizations and check the rest exist.

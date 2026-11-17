@@ -109,9 +109,34 @@ Column 1 after the last timestep, from the model top down
   surface                                                    0.821660  0.001765
 ```
 
-## Limitations
+## Profiling
 
-- `GridShape.INTERFACE` variables are not supported.
-- The variables in one `for_each_cell` call must be either all per grid cell or all per
-  column.
-- Only `float` variables are supported.
+QUACS includes a simple profiler that parameterization developers can use to get rough
+estimates of runtime and whether their parameterization functions can be jit-compiled
+by Numba.
+
+To run the profiler for the toy model's ozone parameterization, run:
+```sh
+uv run python examples/toy-model/profile_ozone.py
+```
+
+The report output from the profiler should look something like this:
+```sh
+(quacs) user@puget-282528:~/git-repos/quacs$ uv run python examples/toy-model/profile_ozone.py 
+Profile of 'ozone_chemistry' over 50 samples on 12 grid cells
+  mean:                   3.792 us
+  standard deviation:     150 ns
+  fastest sample:         3.657 us
+  slowest sample:         4.412 us
+  variables, from lowest to highest across the samples:
+                       starting value    ending domain mean
+    ozone              0.01846 to 0.993  0.01754 to 0.9507
+    actinic_flux       0                 0 to 0.9589
+    absorbed_flux      0                 0 to 0.2582
+    temperature        201.5 to 317.7    201.5 to 317.7
+    chemistry_updates  0                 1 to 1
+    is_daytime         0 to 1            0 to 1
+  functions:
+    attenuate (for_each_column): compiles with Numba
+    react (for_each_cell): compiles with Numba
+```
