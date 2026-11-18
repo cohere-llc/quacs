@@ -21,8 +21,9 @@ class HeatingScheme:
 
     name = "heating"
 
-    def __init__(self, rate_per_call: float = 0.5) -> None:
-        self._rate_per_call = rate_per_call
+    def __init__(self, heating_rate: float = 3.0) -> None:
+        """`heating_rate` is the temperature increase under an overhead sun, in K per hour."""
+        self._heating_rate = heating_rate
 
     def register_variables(self) -> list[VariableSpec]:
         return [
@@ -58,35 +59,57 @@ class HeatingScheme:
                 description="Whether the sun is above the horizon",
                 permissions=Permissions.OWN,
             ),
+            VariableSpec(
+                name="time_step",
+                shape=GridShape.DOMAIN,
+                dtype="float",
+                units="s",
+                description="Model time step",
+                permissions=Permissions.READ_ONLY,
+            ),
         ]
 
     def run(self, state: QuacsState) -> None:
-        rate = self._rate_per_call
-
-        def heat(temperature: Variable, cos_solar_zenith_angle: Variable) -> None:
-            temperature.set(temperature.get() + rate * cos_solar_zenith_angle.get())
+        def heat(
+            temperature: Variable,
+            cos_solar_zenith_angle: Variable,
+            time_step: float,
+            heating_rate: float
+        ) -> None:
+            heating = heating_rate * time_step / 3600.0 * cos_solar_zenith_angle.get()
+            temperature.set(temperature.get() + heating)
 
         def total_column_heating(
             column: Column,
             cos_solar_zenith_angle: Variable,
             column_heating: Variable,
             is_daytime: Variable[bool],
+            time_step: float,
+            heating_rate: float,
         ) -> None:
             net_heating = 0.0
             while True:
-                net_heating += rate * cos_solar_zenith_angle.get()
+                net_heating += heating_rate * time_step / 3600.0 * cos_solar_zenith_angle.get()
                 if column.at_model_top():
                     break
                 column.step_toward_model_top()
             column_heating.set(net_heating)
             is_daytime.set(cos_solar_zenith_angle.get() > 0.0)
 
-        state.for_each_cell(heat, "temperature", "cos_solar_zenith_angle")
+        state.for_each_cell(
+            heat,
+            "temperature",
+            "cos_solar_zenith_angle",
+            "time_step",
+            self._heating_rate,
+        )
         state.for_each_column(
             total_column_heating,
             "cos_solar_zenith_angle",
             "column_heating",
             "is_daytime",
+            "time_step",
+            self._heating_rate,
             start="surface",
         )
 

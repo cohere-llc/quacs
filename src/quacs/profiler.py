@@ -19,7 +19,7 @@ import numba
 import numpy as np
 from scipy.stats import qmc
 
-from quacs.accessors import Adjacent
+from quacs.accessors import Adjacent, Argument, Scalar
 from quacs.host_adapter import HostAdapter
 from quacs.parameterization import Parameterization
 from quacs.registry import ParameterizationRegistry
@@ -27,10 +27,11 @@ from quacs.shapes import GridShape
 from quacs.state import QuacsState
 from quacs.variables import Permissions, VariableSpec
 
-_ZEROS: dict[str, float | int | bool] = {"float": 0.0, "int": 0, "bool": False}
+_ZEROS: dict[str, Scalar] = {"float": 0.0, "int": 0, "bool": False}
 
-_Call = tuple[str, Callable[..., None], tuple[str | Adjacent, ...]]
+_Call = tuple[str, Callable[..., None], tuple[Argument, ...]]
 
+_SCALAR_TYPES: dict[str, Any] = {"float": numba.float64, "int": numba.int64, "bool": numba.boolean}
 
 class ProfilingHost(HostAdapter, Protocol):
     """A host application that will create and manage the state for the profiling run."""
@@ -45,6 +46,10 @@ class ProfilingHost(HostAdapter, Protocol):
 
     def domain_mean(self, host_name: str) -> float:
         """Returns the mean of a variable over the host's whole domain."""
+        ...
+
+    def fill(self, host_name: str, value: Scalar) -> None:
+        """Sets a variable to `value` everywhere in the host's domain."""
         ...
 
 
@@ -162,12 +167,14 @@ def profile(
     sampled = [spec for spec in specs.values() if _is_sampled(spec, ranges)]
     starting_values = _sample(sampled, ranges, samples, np.random.default_rng(seed))
 
+    host_names = {name: name_map.get(name) or name for name in specs}
+    
     def start_from(sample: int) -> None:
-        for spec in specs.values():
-            if spec.name in starting_values:
-                _fill(state, spec, starting_values[spec.name][sample].item())
+        for name, spec in specs.items():
+            if name in starting_values:
+                host.fill(host_names[name], starting_values[spec.name][sample].item())
             else:
-                _fill(state, spec, _ZEROS[spec.dtype])
+                host.fill(host_names[name], _ZEROS[spec.dtype])
 
     # An untimed first run records the functions the parameterization uses, and gives a
     # host that compiles them the chance to do so.
@@ -175,7 +182,6 @@ def profile(
     start_from(0)
     parameterization.run(QuacsState(recorder, name_map))
 
-    host_names = {name: name_map.get(name) or name for name in specs}
     times = np.empty(samples)
     ending_means = {name: np.empty(samples) for name in specs}
     for sample in range(samples):
@@ -186,9 +192,11 @@ def profile(
         for name, host_name in host_names.items():
             ending_means[name][sample] = host.domain_mean(host_name)
 
-    dtypes = {spec.name: spec.dtype for spec in host_specs}
-    functions = _check_functions(recorder.calls, dtypes)
-    return ProfileReport(parameterization.name, grid_cells, times, starting_values, ending_means, functions)
+    variables = {spec.name: spec for spec in host_specs}
+    functions = _check_functions(recorder.calls, variables)
+    return ProfileReport(
+        parameterization.name, grid_cells, times, starting_values, ending_means, functions
+    )
 
 
 def _is_sampled(spec: VariableSpec, ranges: dict[str, tuple[float, float]]) -> bool:
@@ -261,23 +269,6 @@ def _sample(
     return points
 
 
-def _fill(state: QuacsState, spec: VariableSpec, value: float | int | bool) -> None:  #noqa: PYI041
-    """Set a variable to `value` everywhere, using QUACS operations."""
-
-    def set_value(variable: Any) -> None:
-        variable.set(value)
-
-    def set_column_value(column: Any, variable: Any) -> None:
-        variable.set(value)
-
-    if spec.shape is GridShape.CELL:
-        state.for_each_cell(set_value, spec.name)
-    elif spec.shape is GridShape.INTERFACE:
-        state.for_each_interface(set_value, spec.name)
-    else:
-        state.for_each_column(set_column_value, spec.name)
-
-
 class _RecordingHost:
     """Passes every operation on to a host, and records the functions it was given."""
 
@@ -288,45 +279,59 @@ class _RecordingHost:
     def canonical_name_map(self) -> dict[str, str | None]:
         return self._host.canonical_name_map()
 
-    def for_each_cell(self, func: Callable[..., None], *variables: str | Adjacent) -> None:
-        self.calls.append(("cell", func, variables))
-        self._host.for_each_cell(func, *variables)
+    def for_each_cell(self, func: Callable[..., None], *arguments: Argument) -> None:
+        self.calls.append(("cell", func, arguments))
+        self._host.for_each_cell(func, *arguments)
 
     def for_each_column(
         self,
         func: Callable[..., None],
-        *variables: str | Adjacent,
+        *arguments: Argument,
         start: Literal["surface", "model_top"] = "surface",
     ) -> None:
-        self.calls.append(("column", func, variables))
-        self._host.for_each_column(func, *variables, start=start)
+        self.calls.append(("column", func, arguments))
+        self._host.for_each_column(func, *arguments, start=start)
 
-    def for_each_interface(self, func: Callable[..., None], *variables: str | Adjacent) -> None:
-        self.calls.append(("interface", func, variables))
-        self._host.for_each_interface(func, *variables)
-
-
-def _name(variable: str | Adjacent) -> str:
-    return variable.name if isinstance(variable, Adjacent) else variable
+    def for_each_interface(self, func: Callable[..., None], *arguments: Argument) -> None:
+        self.calls.append(("interface", func, arguments))
+        self._host.for_each_interface(func, *arguments)
 
 
-def _side(variable: str | Adjacent) -> str | None:
-    return variable.side if isinstance(variable, Adjacent) else None
+def _name(argument: Argument) -> str:
+    return (
+        argument.name if isinstance(argument, Adjacent) else argument
+        if isinstance(argument, str) else "local scalar"
+    )
 
+def _side(argument: Argument) -> str | None:
+    return argument.side if isinstance(argument, Adjacent) else None
 
-def _check_functions(calls: list[_Call], dtypes: dict[str, str]) -> list[FunctionReport]:
+def _argument_type(
+    argument: Argument, variables: dict[str, VariableSpec], accessors: dict[str, Any]
+) -> Any:
+    """The Numba type a function receives for one entry in a `for_each_*` call."""
+    if not isinstance(argument, (str, Adjacent)):
+        return numba.typeof(argument)
+    spec = variables[_name(argument)]
+    if spec.shape is GridShape.DOMAIN:
+        return _SCALAR_TYPES[spec.dtype]
+    return accessors[spec.dtype]
+
+def _check_functions(
+        calls: list[_Call], variables: dict[str, VariableSpec]
+) -> list[FunctionReport]:
     """Try to compile each recorded function with Numba, without running it."""
     accessors, column = _stand_in_types()
     reports = []
-    for operation, func, variables in calls:
-        present = [accessors[dtypes[_name(variable)]] for variable in variables]
+    for operation, func, arguments in calls:
+        present = [_argument_type(argument, variables, accessors) for argument in arguments]
         variants = [present]
         for side in ("above", "below"):
-            if any(_side(variable) == side for variable in variables):
+            if any(_side(argument) == side for argument in arguments):
                 variants.append(
                     [
-                        numba.types.none if _side(variable) == side else accessor
-                        for variable, accessor in zip(variables, present)
+                        numba.types.none if _side(argument) == side else argument_type
+                        for argument, argument_type in zip(arguments, present)
                     ]
                 )
         leading = [column] if operation == "column" else []

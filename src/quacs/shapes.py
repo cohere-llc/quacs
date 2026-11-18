@@ -21,6 +21,7 @@ class GridShape(Enum):
     SURFACE_CELL = auto()  # one value per column
     MODEL_TOP_CELL = auto()  # one value per column
     COLUMN = auto()  # one value per column, describing the column as a whole
+    DOMAIN = auto()  # one value that applied to the whole model domain
 
     @property
     def is_level_resolved(self) -> bool:

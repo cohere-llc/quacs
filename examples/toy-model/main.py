@@ -8,6 +8,8 @@ Run from the repository root with:
 
 from __future__ import annotations
 
+import sys
+
 from host_adapter import NCOLUMNS, NLEVELS, ToyHostAdapter
 from parameterizations import HeatingScheme, OzoneChemistry, SurfaceDeposition
 
@@ -93,7 +95,7 @@ def profile_rows(host: ToyHostAdapter, column: int) -> list[list[str]]:
 
 
 def main() -> None:
-    host = ToyHostAdapter()
+    host = ToyHostAdapter(compiled="--compiled" in sys.argv)
     runtime = Runtime(host, [HeatingScheme(), OzoneChemistry(), SurfaceDeposition()], HOOKS)
     host.allocate_registered_variables(runtime.register_variables())
 

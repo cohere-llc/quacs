@@ -134,3 +134,10 @@ def lower(name: str) -> Adjacent:
     """In a `for_each_cell` or `for_each_column` call, names a variable at the lower
     interface of a grid cell."""
     return Adjacent(name, "lower")
+
+# A single value, used for allowable scalar types of `for_each_*` arguments`
+type Scalar = float | int | bool
+
+# The `Argument` type is used to allow passing in non-constant values into
+# `for_each_*` functions.
+type Argument = str | Adjacent | float | int | bool

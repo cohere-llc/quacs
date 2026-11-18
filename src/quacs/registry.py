@@ -7,8 +7,9 @@ from __future__ import annotations
 import dataclasses
 import itertools
 
-from quacs.exceptions import NameConflictError, OverwriteVariableError
+from quacs.exceptions import NameConflictError, OverwriteVariableError, ReadOnlyVariableError
 from quacs.parameterization import Parameterization
+from quacs.shapes import GridShape
 from quacs.variables import Permissions, VariableSpec
 
 
@@ -31,6 +32,12 @@ class ParameterizationRegistry:
             )
         vars = parameterization.register_variables()
         for var in vars:
+            if var.shape == GridShape.DOMAIN and var.permissions is not Permissions.READ_ONLY:
+                raise ReadOnlyVariableError(
+                    var.name,
+                    "it has one value for the whole domain, which only the host application "
+                    "can set. Register it as READ_ONLY.",
+                )
             if var.permissions == Permissions.OWN:
                 if var.name in self._owned_variables:
                     raise OverwriteVariableError(

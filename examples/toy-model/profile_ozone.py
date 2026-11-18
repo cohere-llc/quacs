@@ -8,15 +8,35 @@ Run from the repository root with:
 
 from __future__ import annotations
 
+import numpy as np
 from host_adapter import ToyHostAdapter
 from parameterizations import OzoneChemistry
 
 from quacs.profiler import profile
 
-report = profile(
+NCOLUMNS = 500
+NLEVELS = 20
+RANGES = {"ozone": (0.0, 1.0), "temperature": (200.0, 320.0)}
+
+interpreted = profile(
     OzoneChemistry(),
-    ToyHostAdapter(),
-    ranges={"ozone": (0.0, 1.0), "temperature": (200.0, 320.0)},
-    samples=50,
+    ToyHostAdapter(NCOLUMNS, NLEVELS, compiled=False),
+    RANGES,
 )
-print(report)
+compiled = profile(
+    OzoneChemistry(),
+    ToyHostAdapter(NCOLUMNS, NLEVELS),
+    RANGES,
+)
+
+print("Interpreted")
+print(interpreted)
+print("\nCompiled")
+print(compiled)
+
+for name, means in interpreted.ending_means.items():
+    np.testing.assert_allclose(compiled.ending_means[name], means, rtol=1e-12)
+print(
+    f"\nThe two runs give the same results. Compiled is "
+    f"{interpreted.mean / compiled.mean:.1f} times as fast as interpreted."
+)
