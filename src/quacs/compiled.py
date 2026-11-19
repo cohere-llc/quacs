@@ -21,7 +21,7 @@ from typing import Any
 import numba
 import numpy as np
 from numba import types
-from numba.extending import intrinsic, overload_method
+from numba.extending import intrinsic, overload, overload_method
 
 from quacs.accessors import Scalar
 from quacs.exceptions import ReadOnlyVariableError
@@ -174,8 +174,34 @@ def _accessor_class(value_type: Any, per_column: bool, read_only: bool) -> Any:
     return cls
 
 
+# The value type behind each bound accessor class, and whether it is read-only.
+_BOUND_KINDS: dict[type, tuple[Any, bool]] = {}
+
+
+@functools.cache
+def _bound_class(value_type: Any, read_only: bool) -> Any:
+    """A named tuple class for accessors that hold the address of one value.
+    
+    The loops over grid cells and interfaces make one of these for each variable at each
+    grid cell or interface, so that `get` and `set` are a single read or write.
+    """
+    fields = ("pointer", "state", "position") if read_only else ("pointer",)
+    cls = namedtuple("_BoundAccessor", fields)
+    _BOUND_KINDS[cls] = (value_type, read_only)
+    return cls
+
+
 @overload_method(types.BaseNamedTuple, "get")
 def _overload_get(accessor):
+    bound = _BOUND_KINDS.get(accessor.instance_class)
+    if bound is not None:
+        load_bound = _loader(bound[0])
+
+        def get_bound(accessor):
+            return load_bound(accessor.pointer)
+
+        return get_bound
+    
     kind = _KINDS.get(accessor.instance_class)
     if kind is None:
         return None
@@ -198,6 +224,18 @@ def _overload_get(accessor):
 
 @overload_method(types.BaseNamedTuple, "set")
 def _overload_set(accessor, value):
+    bound = _BOUND_KINDS.get(accessor.instance_class)
+    if bound is not None:
+        store_bound = _storer(bound[0])
+
+        def set_bound(accessor, value):
+            store_bound(accessor.pointer, value)
+
+        def set_bound_read_only(accessor, value):
+            _store_int(accessor.state + _WORD * _VIOLATION, accessor.position)
+
+        return set_bound_read_only if bound[1] else set_bound
+    
     kind = _KINDS.get(accessor.instance_class)
     if kind is None:
         return None
@@ -236,6 +274,57 @@ def _accessor(field: Field, state: int, position: int) -> Any:
         state,
         position,
     )
+
+
+def _bind(argument, column, level):
+    """Returns an accessor for one variable at one grid cell or interface.
+    
+    Anything that is not an accessor is returned unchanged.
+    """
+    raise NotImplementedError
+
+
+@overload(_bind)
+def _overload_bind(argument, column, level):
+    kind = _KINDS.get(getattr(argument, "instance_class", None))
+    if kind is None:
+        def unchanged(argument, column, level):
+            return argument
+
+        return unchanged
+
+    value_type, per_column, read_only = kind
+    bound = _bound_class(value_type, read_only)
+
+    def bind_column(argument, column, level):
+        return bound(argument.address + column * argument.column_stride)
+
+    def bind_column_read_only(argument, column, level):
+        return bound(
+            argument.address + column * argument.column_stride,
+            argument.state,
+            argument.position,
+        )
+
+    def bind_level(argument, column, level):
+        return bound(
+            argument.address
+            + column * argument.column_stride
+            + (level + argument.offset) * argument.level_stride
+        )
+
+    def bind_level_read_only(argument, column, level):
+        return bound(
+            argument.address
+            + column * argument.column_stride
+            + (level + argument.offset) * argument.level_stride,
+            argument.state,
+            argument.position,
+        )
+
+    if per_column:
+        return bind_column_read_only if read_only else bind_column
+    return bind_level_read_only if read_only else bind_level
 
 
 def _check_shape(operation: Operation, field: Field, ncolumns: int, nlevels: int) -> None:
@@ -287,15 +376,6 @@ def _with_scalars(entries: tuple[Any, ...], arguments: list[Field | Scalar]) -> 
 
 
 @numba.njit
-def _run_cells(kernel, state, ncolumns, nlevels, arguments):
-    for column in range(ncolumns):
-        _store_int(state + _WORD * _COLUMN, column)
-        for level in range(nlevels):
-            _store_int(state + _WORD * _LEVEL, level)
-            kernel(*arguments)
-
-
-@numba.njit
 def _run_columns(kernel, cursor, ncolumns, start_level, arguments):
     for column in range(ncolumns):
         _store_int(cursor.state + _WORD * _COLUMN, column)
@@ -303,17 +383,39 @@ def _run_columns(kernel, cursor, ncolumns, start_level, arguments):
         kernel(cursor, *arguments)
 
 
-@numba.njit
-def _run_interfaces(kernel, state, ncolumns, nlevels, at_surface, between, at_top):
+@functools.cache
+def _cell_loop(count: int) -> Any:
+    """A compiled loop that applies a function with `count` arguments to every grid cell."""
+    bound = ", ".join(f"_bind(arguments[{i}], column, level)" for i in range(count))
+    source = f"""
+def run_cells(kernel, ncolumns, nlevels, arguments):
     for column in range(ncolumns):
-        _store_int(state + _WORD * _COLUMN, column)
-        _store_int(state + _WORD * _LEVEL, 0)
-        kernel(*at_surface)
+        for level in range(nlevels):
+            kernel({bound})
+"""
+    namespace: dict[str, Any] = {"_bind": _bind}
+    exec(source, namespace)  # noqa: S102
+    return numba.njit(namespace["run_cells"])
+
+
+@functools.cache
+def _interface_loop(count: int) -> Any:
+    """A compiled loop that applies a function with `count` arguments to every interface."""
+
+    def bound(arguments: str, level: str) -> str:
+        return ", ".join(f"_bind({arguments}[{i}], column, {level})" for i in range(count))
+
+    source = f"""
+def run_interfaces(kernel, ncolumns, nlevels, at_surface, between, at_top):
+    for column in range(columns):
+        kernel({bound("at_surface", "0")})
         for interface in range(1, nlevels):
-            _store_int(state + _WORD * _LEVEL, interface)
-            kernel(*between)
-        _store_int(state + _WORD * _LEVEL, nlevels)
-        kernel(*at_top)
+            kernel({bound("between", "interface")})
+        kernel({bound("at_top", "nlevels")})
+"""
+    namespace: dict[str, Any] = {"_bind": _bind}
+    exec(source, namespace)  # noqa: S102
+    return numba.njit(namespace["run_interfaces"])
 
 
 @dataclass(frozen=True, eq=False)
@@ -354,11 +456,11 @@ class CompiledEngine:
         plan.state[_VIOLATION] = -1
         between = _with_scalars(plan.between, arguments)
         if operation == "cell":
-            _run_cells(plan.kernel, plan.cursor.state, self._ncolumns, self._nlevels, between)
+            _cell_loop(len(arguments))(plan.kernel, self._ncolumns, self._nlevels, between)
         elif operation == "column":
             _run_columns(plan.kernel, plan.cursor, self._ncolumns, start_level, between)
         elif operation == "interface":
-            _run_interfaces(
+            _interface_loop(len(arguments))(
                 plan.kernel,
                 plan.cursor.state,
                 self._ncolumns,

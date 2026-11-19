@@ -138,10 +138,10 @@ The report output from the profiler should look something like this:
 ```sh
 Interpreted
 Profile of 'ozone_chemistry' over 50 samples on 10000 grid cells. Times are per-grid-cell.
-  mean:                   2.816 us
-  standard deviation:     25 ns
-  fastest sample:         2.787 us
-  slowest sample:         2.930 us
+  mean:                   2.995 us
+  standard deviation:     27 ns
+  fastest sample:         2.871 us
+  slowest sample:         3.028 us
   variables, from lowest to highest across the samples:
                        starting value    ending domain mean
     ozone              0.01846 to 0.993  0.01754 to 0.9448
@@ -156,10 +156,10 @@ Profile of 'ozone_chemistry' over 50 samples on 10000 grid cells. Times are per-
 
 Compiled
 Profile of 'ozone_chemistry' over 50 samples on 10000 grid cells. Times are per-grid-cell.
-  mean:                   10 ns
+  mean:                   8 ns
   standard deviation:     1 ns
-  fastest sample:         9 ns
-  slowest sample:         19 ns
+  fastest sample:         8 ns
+  slowest sample:         17 ns
   variables, from lowest to highest across the samples:
                        starting value    ending domain mean
     ozone              0.01846 to 0.993  0.01754 to 0.9448
@@ -172,5 +172,5 @@ Profile of 'ozone_chemistry' over 50 samples on 10000 grid cells. Times are per-
     attenuate (for_each_column): compiles with Numba
     react (for_each_cell): compiles with Numba
 
-The two runs give the same results. Compiled is 280.4 times as fast as interpreted.
+The two runs give the same results. Compiled is 356.0 times as fast as interpreted.
 ```
