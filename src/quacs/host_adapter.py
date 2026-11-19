@@ -17,7 +17,7 @@ from quacs.accessors import Argument
 @runtime_checkable
 class HostAdapter(Protocol):
     """Protocol that a host application must implement to work with QUACS.
-    
+
     Each `for_each_*` operation calls `func` with one argument per entry in `arguments`,
     in the same order.
 

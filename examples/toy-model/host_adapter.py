@@ -37,7 +37,7 @@ _STORAGE_TYPES: dict[str, np.dtype] = {
 
 class ToyHostAdapter(ArrayHostAdapter):
     """Toy Host Model adapter.
-    
+
     With `compiled=True`, parameterization functions are compiled with Numba. Otherwise
     they are called once per grid cell, column, or interface from a Python loop.
     """

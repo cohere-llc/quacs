@@ -27,7 +27,7 @@ _KINDS: dict[str, str] = {"float": "f", "int": "iu", "bool": "b"}
 
 class ArrayHostAdapter(ABC):
     """A host adapter for host application that can present each variable as a NumPy view.
-    
+
     A host application subclasses this and provides `canonical_name_map`, `grid_shapes`,
     `view`, and `create_variable`. This class provides the `for_each_*` operations, the
     registration of variables, and what the QUACS profiler needs.
@@ -75,7 +75,7 @@ class ArrayHostAdapter(ABC):
     @abstractmethod
     def create_variable(self, spec: VariableSpec) -> None:
         """Creates a variable the host application does not have, set to zero or `False`.
-        
+
         `spec.name` is the host name. Afterwards the variable must be in `grid_shapes`
         and available from `view`.
         """
@@ -91,7 +91,6 @@ class ArrayHostAdapter(ABC):
         if shape is GridShape.DOMAIN:
             return ()
         return (self._ncolumns,)
-
 
     # The grid-iterating operations
 
@@ -110,12 +109,11 @@ class ArrayHostAdapter(ABC):
     def for_each_interface(self, func: Callable[..., None], *arguments: Argument) -> None:
         self._engine.run("interface", func, self._fields("interface", arguments))
 
-
     # Variable registration
 
     def allocate_registered_variables(self, specs: list[VariableSpec]) -> None:
         """Creates the variables that parameterizations own and checks that the rest exist.
-        
+
         `specs` is the list returned by `Runtime.register_variables`.
         """
         for spec in specs:
@@ -146,7 +144,9 @@ class ArrayHostAdapter(ABC):
     def fill(self, host_name: str, value: Scalar) -> None:
         self.view(host_name)[...] = value
 
-    def _fields(self, operation: Operation, arguments: tuple[Argument, ...]) -> list[Field | Scalar]:
+    def _fields(
+        self, operation: Operation, arguments: tuple[Argument, ...]
+    ) -> list[Field | Scalar]:
         """Attach storage to each variable named in a  `for_each_*` call."""
         fields: list[Field | Scalar] = []
         for argument in resolve(operation, arguments, self.grid_shapes()):

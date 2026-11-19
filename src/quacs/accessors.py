@@ -135,6 +135,7 @@ def lower(name: str) -> Adjacent:
     interface of a grid cell."""
     return Adjacent(name, "lower")
 
+
 # A single value, used for allowable scalar types of `for_each_*` arguments`
 type Scalar = float | int | bool
 

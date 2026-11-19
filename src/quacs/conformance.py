@@ -55,7 +55,7 @@ class ConformanceReport:
     results: list[CheckResult]
 
     @property
-    def passed(self):
+    def passed(self) -> bool:
         return all(result.passed for result in self.results)
 
     def __str__(self) -> str:
@@ -70,7 +70,7 @@ class ConformanceReport:
 
 class Check(Protocol):
     """A parameterization that can report whether the host application ran it correctly.
-    
+
     `runs` is the number of times the check has been run.
     """
 
@@ -96,7 +96,7 @@ def _compare(
     view: View, runs: int, expected: Expected, tolerance: float = 0.0
 ) -> list[CheckResult]:
     """Compare each variable with the expected values.
-    
+
     This expects that all values start at zero or False before the parameterization is run.
     """
     results = []
@@ -105,22 +105,22 @@ def _compare(
             values, rule = 0, "is zero or False before the check has run"
         actual = np.asarray(view(name))
         try:
-            expected = np.broadcast_to(values, actual.shape)
+            expected_values = np.broadcast_to(values, actual.shape)
         except ValueError:
             detail = f"The view has shape {actual.shape}, which does not fit the grid."
             results.append(CheckResult(name, rule, False, detail))
             continue
         if actual.dtype.kind == "f":
-            matches = np.isclose(actual, expected, rtol=0.0, atol=tolerance)
+            matches = np.isclose(actual, expected_values, rtol=0.0, atol=tolerance)
         else:
-            matches = actual == expected
+            matches = actual == expected_values
         if matches.all():
             results.append(CheckResult(name, rule, True))
             continue
         first = tuple(int(index) for index in np.argwhere(~matches)[0])
         detail = (
             f"{int((~matches).sum())} of {matches.size} values differ. The first is at index "
-            f"{first} of the view: expected {expected[first].item()}, found {actual[first].item()}."
+            f"{first} of the view: expected {expected_values[first].item()}, found {actual[first].item()}."
         )
         results.append(CheckResult(name, rule, False, detail=detail))
     return results
@@ -552,7 +552,7 @@ def tag_columns(view: View) -> None:
 
 def verify(checks: Iterable[Check], view: View) -> ConformanceReport:
     """Reports whether the variables of `checks` hold the expected values.
-    
+
     `view` should return a variable by name in the standard layout of `ArrayHostAdapter.view`.
     It can return a copy.
     """
@@ -563,7 +563,7 @@ def run_conformance(
     host: ArrayHostAdapter, checks: Iterable[Check] | None = None, runs: int = 3
 ) -> ConformanceReport:
     """Runs `checks` on `host` and reports the outcome.
-    
+
     If `checks` is `None`, the default checks are run.
 
     Each check is run `runs` times. `host` must not have run the checks before, because
@@ -602,6 +602,7 @@ def _check_name_map(host: ArrayHostAdapter) -> CheckResult:
         not missing,
         f"Not in grid_shapes: {', '.join(missing)}." if missing else "",
     )
+
 
 def _check_views(host: ArrayHostAdapter, names: list[str]) -> CheckResult:
     copies = sorted(

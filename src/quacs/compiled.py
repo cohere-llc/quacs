@@ -55,6 +55,7 @@ def _loader(value_type: Any) -> Any:
 
     return load
 
+
 @functools.cache
 def _storer(value_type: Any) -> Any:
     """A compiled function that writes one value of `value_type` to a memory address."""
@@ -181,7 +182,7 @@ _BOUND_KINDS: dict[type, tuple[Any, bool]] = {}
 @functools.cache
 def _bound_class(value_type: Any, read_only: bool) -> Any:
     """A named tuple class for accessors that hold the address of one value.
-    
+
     The loops over grid cells and interfaces make one of these for each variable at each
     grid cell or interface, so that `get` and `set` are a single read or write.
     """
@@ -201,7 +202,7 @@ def _overload_get(accessor):
             return load_bound(accessor.pointer)
 
         return get_bound
-    
+
     kind = _KINDS.get(accessor.instance_class)
     if kind is None:
         return None
@@ -235,7 +236,7 @@ def _overload_set(accessor, value):
             _store_int(accessor.state + _WORD * _VIOLATION, accessor.position)
 
         return set_bound_read_only if bound[1] else set_bound
-    
+
     kind = _KINDS.get(accessor.instance_class)
     if kind is None:
         return None
@@ -278,7 +279,7 @@ def _accessor(field: Field, state: int, position: int) -> Any:
 
 def _bind(argument, column, level):
     """Returns an accessor for one variable at one grid cell or interface.
-    
+
     Anything that is not an accessor is returned unchanged.
     """
     raise NotImplementedError
@@ -288,6 +289,7 @@ def _bind(argument, column, level):
 def _overload_bind(argument, column, level):
     kind = _KINDS.get(getattr(argument, "instance_class", None))
     if kind is None:
+
         def unchanged(argument, column, level):
             return argument
 
@@ -351,9 +353,7 @@ def _memory(array: np.ndarray) -> tuple[Any, ...]:
     return (array.__array_interface__["data"][0], array.shape, array.strides, array.dtype)
 
 
-def _at(
-    entries: tuple[Any, ...], arguments: list[Field | Scalar], level: int
-) -> tuple[Any, ...]:
+def _at(entries: tuple[Any, ...], arguments: list[Field | Scalar], level: int) -> tuple[Any, ...]:
     """Variable entries for an interface.
 
     Adjacent grid cells that do not exist for this interface are set as `None`.
@@ -421,7 +421,7 @@ def run_interfaces(kernel, ncolumns, nlevels, at_surface, between, at_top):
 @dataclass(frozen=True, eq=False)
 class _Plan:
     """The compiled objects for one function and the memory it is applied to.
-    
+
     `state` is the cursor's state, which `cursor` and every accessor point to.
     `between`, `at_surface`, and `at_top` hold one entry per argument of the call. Only
     interface functions use `at_surface` and `at_top`.
@@ -476,7 +476,6 @@ class CompiledEngine:
             field = arguments[violation]
             assert isinstance(field, Field)
             raise ReadOnlyVariableError(field.name, READ_ONLY_REASONS[operation])
-
 
     def _plan(
         self, operation: Operation, func: Callable[..., None], arguments: list[Field | Scalar]

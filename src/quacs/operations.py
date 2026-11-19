@@ -52,7 +52,7 @@ READ_ONLY_REASONS: dict[str, str] = {
 @dataclass(frozen=True)
 class Slot:
     """Describes what a variable name passed to a `for_each_*` operation refers to.
-    
+
     `level_offset` is the variable's array index relative to the selected grid cell
     or interface. Arrays are indexed starting at the surface. Interface `k` is the lower
     interface of grid cell `k`. `level_offset` is None for variables without levels.
@@ -69,7 +69,7 @@ class Slot:
 @dataclass(frozen=True, eq=False)
 class Field:
     """Describes a variable that will be used in a `for_each_*` run.
-    
+
     `array` has one row per column. For a variable with levels, each row holds the
     levels index starting at the surface and increasing with altitude. For any other
     variable, each row holds one value. `level_offset` and `read_only` are as for `Slot`.
@@ -87,10 +87,10 @@ def resolve(
     shapes: Mapping[str, GridShape],
 ) -> list[Slot | Scalar]:
     """Determines what each entry in a `for_each_*` call refers to."
-    
+
     `shapes` gives the shape of every variable in the host state, by host name.
     Primitive types are returned unchanged; each variable is returned as a `Slot`.
-    
+
     Raises `UnknownVariableError` for a name that is not in `shapes`, and `ValueError`
     for a variable that is named with the wrong directional selector for the operation.
     """

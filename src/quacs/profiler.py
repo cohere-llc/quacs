@@ -33,6 +33,7 @@ _Call = tuple[str, Callable[..., None], tuple[Argument, ...]]
 
 _SCALAR_TYPES: dict[str, Any] = {"float": numba.float64, "int": numba.int64, "bool": numba.boolean}
 
+
 class ProfilingHost(HostAdapter, Protocol):
     """A host application that will create and manage the state for the profiling run."""
 
@@ -56,7 +57,7 @@ class ProfilingHost(HostAdapter, Protocol):
 @dataclass(frozen=True)
 class FunctionReport:
     """Describes whether a function passed to a `for_each_*` operation can be compiled by Numba.
-    
+
     `compiles` is `None` if the check could not be made.
     """
 
@@ -69,8 +70,8 @@ class FunctionReport:
 @dataclass(frozen=True)
 class ProfileReport:
     """The result of profiling one parameterization.
-    
-    
+
+
     `times` holds the runtime of each sample in seconds.
     `starting_values` holds the value each sampled variable started from in each sample.
     `ending_means` holds the domain mean of every variable the parameterization uses at
@@ -118,7 +119,9 @@ class ProfileReport:
         rows = [["", "starting value", "ending domain mean"]]
         for name, means in self.ending_means.items():
             start = self.starting_values.get(name)
-            rows.append([name, "0" if start is None else _format_range(start), _format_range(means)])
+            rows.append(
+                [name, "0" if start is None else _format_range(start), _format_range(means)]
+            )
         widths = [max(len(row[column]) for row in rows) for column in range(3)]
         for row in rows:
             cells = [cell.ljust(width) for cell, width in zip(row, widths)]
@@ -142,12 +145,12 @@ def profile(
 ) -> ProfileReport:
     """Runs `parameterization` on `host` for `samples` different starting conditions and
     reports back timing and results.
-    
+
     `ranges` gives the expected range of each `float` or `int` variable, by the name the
     parameterization uses. A range is needed for every such variable the parameterization
     uses but does not own. Each variable owned by a parameterization is set to zero or
     `False`, unless a range is provided.
-    
+
     The starting conditions are from a Latin hypercube sample. In each sample, the same
     value is applied to every grid cell/interface/column in the domain.
     """
@@ -168,7 +171,7 @@ def profile(
     starting_values = _sample(sampled, ranges, samples, np.random.default_rng(seed))
 
     host_names = {name: name_map.get(name) or name for name in specs}
-    
+
     def start_from(sample: int) -> None:
         for name, spec in specs.items():
             if name in starting_values:
@@ -231,7 +234,7 @@ def _check_ranges(
 
 def _bounds(spec: VariableSpec, ranges: dict[str, tuple[float, float]]) -> tuple[float, float]:
     """The interval to sample for a variable.
-    
+
     Integers are sampled from `[low, high + 1)` and rounded down, so that every integer
     in the range is equally likely to be sampled. Booleans are sampled from `[0, 1)`.
     """
@@ -248,7 +251,7 @@ def _sample(
     rng: np.random.Generator,
 ) -> dict[str, np.ndarray]:
     """Draw a Latin hypercube sample.
-    
+
     Each variable's range is split into `samples` equal bins, and every bin is used
     exactly once.
     """
@@ -299,12 +302,17 @@ class _RecordingHost:
 
 def _name(argument: Argument) -> str:
     return (
-        argument.name if isinstance(argument, Adjacent) else argument
-        if isinstance(argument, str) else "local scalar"
+        argument.name
+        if isinstance(argument, Adjacent)
+        else argument
+        if isinstance(argument, str)
+        else "local scalar"
     )
+
 
 def _side(argument: Argument) -> str | None:
     return argument.side if isinstance(argument, Adjacent) else None
+
 
 def _argument_type(
     argument: Argument, variables: dict[str, VariableSpec], accessors: dict[str, Any]
@@ -317,8 +325,9 @@ def _argument_type(
         return _SCALAR_TYPES[spec.dtype]
     return accessors[spec.dtype]
 
+
 def _check_functions(
-        calls: list[_Call], variables: dict[str, VariableSpec]
+    calls: list[_Call], variables: dict[str, VariableSpec]
 ) -> list[FunctionReport]:
     """Try to compile each recorded function with Numba, without running it."""
     accessors, column = _stand_in_types()
@@ -339,7 +348,7 @@ def _check_functions(
             dispatcher = numba.njit(func)
             for variant in variants:
                 dispatcher.compile(tuple(leading + variant))
-        except Exception as error:  #noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             reports.append(FunctionReport(func.__name__, operation, False, str(error)))
         else:
             reports.append(FunctionReport(func.__name__, operation, True, ""))
@@ -348,7 +357,7 @@ def _check_functions(
 
 def _stand_in_types() -> tuple[dict[str, Any], Any]:
     """Numba types that stand in for a host's accessors and column.
-    
+
     They are only used to check that a function compiles. They are never run.
     """
     from numba import boolean, float64, int64

@@ -74,7 +74,7 @@ class HeatingScheme:
             temperature: Variable,
             cos_solar_zenith_angle: Variable,
             time_step: float,
-            heating_rate: float
+            heating_rate: float,
         ) -> None:
             heating = heating_rate * time_step / 3600.0 * cos_solar_zenith_angle.get()
             temperature.set(temperature.get() + heating)
