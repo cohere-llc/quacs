@@ -407,7 +407,7 @@ def _interface_loop(count: int) -> Any:
 
     source = f"""
 def run_interfaces(kernel, ncolumns, nlevels, at_surface, between, at_top):
-    for column in range(columns):
+    for column in range(ncolumns):
         kernel({bound("at_surface", "0")})
         for interface in range(1, nlevels):
             kernel({bound("between", "interface")})
@@ -462,7 +462,6 @@ class CompiledEngine:
         elif operation == "interface":
             _interface_loop(len(arguments))(
                 plan.kernel,
-                plan.cursor.state,
                 self._ncolumns,
                 self._nlevels,
                 _with_scalars(plan.at_surface, arguments),
