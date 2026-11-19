@@ -38,6 +38,15 @@ class ParameterizationRegistry:
                     "it has one value for the whole domain, which only the host application "
                     "can set. Register it as READ_ONLY.",
                 )
+            if var.transported and (
+                var.permissions is not Permissions.OWN
+                or var.shape is not GridShape.CELL
+                or var.dtype != "float"
+            ):
+                raise ValueError(
+                    f"Variable '{var.name}' cannot be transported. Only a float variable "
+                    f"with one value per grid cell can be, and only its owner can request it."
+                )
             if var.permissions == Permissions.OWN:
                 if var.name in self._owned_variables:
                     raise OverwriteVariableError(

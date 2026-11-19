@@ -62,6 +62,12 @@ class VariableSpec:
     `dtype` is the type of the variable's values as parameterizations see them: Python
     `float`, `int` or `bool`. The host application chooses the precision it uses to store
     `float` and `int` values.
+
+    `transported` asks the host application to move the variable horizontally with the
+    modelled air movement, as it does for its own tracers. Not all models (e.g., box or
+    column models) support this, so it is not a guarantee of transport. Only
+    parameterizations that own a variable can request transport, and only for `float`
+    variables with one value per grid cell.
     """
 
     name: str
@@ -71,3 +77,4 @@ class VariableSpec:
     description: str
     permissions: Permissions
     requested_by: str | None = None
+    transported: bool = False
