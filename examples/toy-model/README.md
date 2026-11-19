@@ -174,3 +174,60 @@ Profile of 'ozone_chemistry' over 50 samples on 10000 grid cells. Times are per-
 
 The two runs give the same results. Compiled is 356.0 times as fast as interpreted.
 ```
+
+## Conformance Tests
+
+For developers integrating QUACS into a new host application, a set of test parameterizations
+is included in QUACS that can be used to determine whether the integration is working
+properly.
+
+For the toy model, this check is in `examples/toy-model/check_host.py`. To run the tests, run:
+```sh
+uv run python examples/toy-model/check_host.py
+```
+
+You should see the following report indicating a successful integration:
+```sh
+QUACS conformance: 41 of 41 checks passed.
+  PASS canonical_name_map: every host name it gives is a variable in grid_shapes
+  PASS view: returns the host application's own memory, which can be written to
+  PASS quacs_check_cell_visits: is zero or False before the check has run
+  PASS quacs_check_cell_flag: is zero or False before the check has run
+  PASS quacs_check_cell_value: is zero or False before the check has run
+  PASS quacs_check_cell_tag: is zero or False before the check has run
+  PASS quacs_check_level: is zero or False before the check has run
+  PASS quacs_check_depth: is zero or False before the check has run
+  PASS quacs_check_column_levels: is zero or False before the check has run
+  PASS quacs_check_column_swept: is zero or False before the check has run
+  PASS quacs_check_surface: is zero or False before the check has run
+  PASS quacs_check_model_top: is zero or False before the check has run
+  PASS quacs_check_interface_number: is zero or False before the check has run
+  PASS quacs_check_interface_cell: is zero or False before the check has run
+  PASS quacs_check_neighbours: is zero or False before the check has run
+  PASS quacs_check_is_boundary: is zero or False before the check has run
+  PASS quacs_check_cell_interfaces: is zero or False before the check has run
+  PASS quacs_check_fixed_cell: is zero or False before the check has run
+  PASS quacs_check_fixed_interface: is zero or False before the check has run
+  PASS quacs_check_fixed_column: is zero or False before the check has run
+  PASS quacs_check_tracer: is zero or False before the check has run
+  PASS quacs_check_cell_visits: every grid cell is visited once per run and keeps its value between runs
+  PASS quacs_check_cell_flag: a bool variable holds what it was set to
+  PASS quacs_check_cell_value: a float variable holds a fraction, and a local scalar reaches the function
+  PASS quacs_check_cell_tag: a grid cell reads the variables of its own column
+  PASS quacs_check_level: a column that starts at the surface steps upward
+  PASS quacs_check_depth: a column that starts at the top steps downward
+  PASS quacs_check_column_levels: a column has every level of the grid
+  PASS quacs_check_column_swept: every column is visited
+  PASS quacs_check_surface: select_surface_cell selects the lowest grid cell
+  PASS quacs_check_model_top: select_model_top selects the highest grid cell
+  PASS quacs_check_interface_number: upper() and lower() name the interfaces of the selected grid cell
+  PASS quacs_check_interface_cell: a column that starts at the surface steps upward
+  PASS quacs_check_neighbours: above() and below() name the grid cells next to an interface
+  PASS quacs_check_is_boundary: only the surface and the model top are missing a grid cell
+  PASS quacs_check_cell_interfaces: a grid cell reads its own upper and lower interfaces
+  PASS quacs_check_read_only: setting a variable of the wrong shape raises ReadOnlyVariableError
+  PASS quacs_check_fixed_cell: is not changed by a function that is not allowed to set it
+  PASS quacs_check_fixed_interface: is not changed by a function that is not allowed to set it
+  PASS quacs_check_fixed_column: is not changed by a function that is not allowed to set it
+  PASS quacs_check_tracer: a transported variable that starts uniform stays uniform
+```
