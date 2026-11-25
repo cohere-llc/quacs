@@ -75,7 +75,7 @@ def allocate(spec: VariableSpec, storage: Storage) -> np.ndarray:
         GridShape.INTERFACE: (NCOLUMNS, NLEVELS + 1),
         GridShape.DOMAIN: (),
     }
-    return np.zeros(shapes.get(spec.shape, (NCOLUMNS,)), dtype = types[storage])
+    return np.zeros(shapes.get(spec.shape, (NCOLUMNS,)), dtype=types[storage])
 
 
 def bind(runtime: EmbeddedRuntime, name: str, array: np.ndarray, storage: Storage) -> None:
@@ -108,7 +108,7 @@ def start(
     [
         {"float": Storage.FLOAT64, "int": Storage.INT32, "bool": Storage.BOOL},
         {"float": Storage.FLOAT32, "int": Storage.INT64, "bool": Storage.INT32},
-    ]
+    ],
 )
 def test_conformance_checks_pass_in_host_memory(
     tmp_path: Path, compiled: bool, storages: dict[str, Storage]

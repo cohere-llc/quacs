@@ -23,7 +23,7 @@ DType = Literal["float", "int", "bool"]
 @dataclass(frozen=True)
 class VariableDefinition:
     """Describes a variable that a set of parameterizations uses.
-    
+
     A set of parameterizations defines each of its variables once, typically in a
     dedicated module. The parameterizations select needed variables from the common
     set of defined variables.
@@ -77,7 +77,7 @@ class VariableDefinition:
     def own(self) -> VariableSpec:
         """Requests the variable for a parameterization that is responsible for setting
         its value.
-        
+
         The host application creates the variable.
         """
         return self._request(Permissions.OWN)
@@ -145,7 +145,7 @@ class VariableSpec:
 def host_name_map(names: Mapping[VariableDefinition, str] | None) -> dict[str, str]:
     """Returns a host application's names for variable, keyed with the names the
     parameterizations use.
-    
+
     `names` gives a mapping from the variable names used by QUACS parameterizations
     to the host variable names, when they differ:
 
@@ -162,8 +162,7 @@ def host_name_map(names: Mapping[VariableDefinition, str] | None) -> dict[str, s
     if not isinstance(names, Mapping):
         raise TypeError(f"`names` must be a dict, not {type(names).__name__}.")
     for definition, host_name in names.items():
-        if not isinstance(definition, VariableDefinition) \
-            or not isinstance(host_name, str):
+        if not isinstance(definition, VariableDefinition) or not isinstance(host_name, str):
             raise TypeError(
                 f"`names` must give the host application's name for a variable "
                 f"as a string, for a QUACS VariableDefinition. It has "
@@ -177,9 +176,9 @@ def host_name_map(names: Mapping[VariableDefinition, str] | None) -> dict[str, s
     return host_names
 
 
-def attach_variables[T](variables: list[VariableSpec]) -> Callable[[type[T], type[T]]]:
+def attach_variables[T](variables: list[VariableSpec]) -> Callable[[type[T]], type[T]]:
     """Attaches variables with specified permissions to a Parameterization.
-    
+
     Example usage:
     ```
     @attach_variables([variables.foo.read_only(), variables.bar.own()])
@@ -190,11 +189,13 @@ def attach_variables[T](variables: list[VariableSpec]) -> Callable[[type[T], typ
     """
 
     def decorator(cls: type[T]) -> type[T]:
-        def register_variables(self) -> list[VariableSpec]:
+        def register_variables(self: type[T]) -> list[VariableSpec]:
             return list(variables)
+
         setattr(cls, "register_variables", register_variables)  # noqa: B010
 
         return cls
+
     return decorator
 
 

@@ -606,8 +606,7 @@ def _check_views(view: View, names: list[str]) -> CheckResult:
     copies = sorted(
         name
         for name in names
-        if not np.shares_memory(view(name), view(name))
-        or not view(name).flags.writeable
+        if not np.shares_memory(view(name), view(name)) or not view(name).flags.writeable
     )
     return CheckResult(
         "view",

@@ -50,6 +50,7 @@ def test_other_variables_cannot_be_transported(
     with pytest.raises(ValueError, match="cannot be transported"):
         ParameterizationRegistry().register(OneVariable(tracer(shape, dtype, permissions)))
 
+
 def test_definition_makes_requests_with_each_permission() -> None:
     ozone = VariableDefinition("ozone", GridShape.CELL, "float", "mol mol-1", "Ozone")
     assert ozone.own() == VariableSpec(

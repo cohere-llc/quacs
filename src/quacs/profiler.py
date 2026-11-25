@@ -326,7 +326,7 @@ def _argument_type(
 ) -> Any:
     """The Numba type a function receives for one entry in a `for_each_*` call."""
     if not isinstance(argument, (str, Adjacent)):
-        return numba.typeof(argument)
+        return numba.typeof(argument)  # type: ignore[no-untyped-call]
     spec = variables[_name(argument)]
     if spec.shape is GridShape.DOMAIN:
         return _SCALAR_TYPES[spec.dtype]
@@ -354,7 +354,7 @@ def _check_functions(
         try:
             dispatcher = numba.njit(func)
             for variant in variants:
-                dispatcher.compile(tuple(leading + variant))
+                dispatcher.compile(tuple(leading + variant))  # type: ignore[attr-defined]
         except Exception as error:  # noqa: BLE001
             reports.append(FunctionReport(func.__name__, operation, False, str(error)))
         else:
@@ -368,47 +368,47 @@ def _stand_in_types() -> tuple[dict[str, Any], Any]:
     They are only used to check that a function compiles. They are never run.
     """
     from numba import boolean, float64, int64
-    from numba.experimental import jitclass
+    from numba.experimental import jitclass  # type: ignore[attr-defined]
 
     def accessor(value_type: Any) -> Any:
         @jitclass([("value", value_type)])
         class AccessorStandIn:
-            def __init__(self, value):
+            def __init__(self, value) -> None:  # type: ignore[no-untyped-def]
                 self.value = value
 
-            def get(self):
+            def get(self):  # type: ignore[no-untyped-def]
                 return self.value
 
-            def set(self, value):
+            def set(self, value):  # type: ignore[no-untyped-def]
                 self.value = value
 
-        return AccessorStandIn.class_type.instance_type
+        return AccessorStandIn.class_type.instance_type  # type: ignore[attr-defined]
 
     @jitclass([("level", int64)])
     class ColumnStandIn:
-        def __init__(self):
+        def __init__(self) -> None:
             self.level = 0
 
-        def step_toward_surface(self, count=1):
+        def step_toward_surface(self, count: int = 1) -> None:
             self.level += count
 
-        def step_toward_model_top(self, count=1):
+        def step_toward_model_top(self, count: int = 1) -> None:
             self.level -= count
 
-        def select_surface_cell(self):
+        def select_surface_cell(self) -> None:
             self.level = 0
 
-        def select_model_top(self):
+        def select_model_top(self) -> None:
             self.level = 0
 
-        def at_surface(self, buffer=0):
+        def at_surface(self, buffer: int = 0) -> int:
             return self.level <= buffer
 
-        def at_model_top(self, buffer=0):
+        def at_model_top(self, buffer: int = 0) -> int:
             return self.level <= buffer
 
     accessors = {"float": accessor(float64), "int": accessor(int64), "bool": accessor(boolean)}
-    return accessors, ColumnStandIn.class_type.instance_type
+    return accessors, ColumnStandIn.class_type.instance_type  # type: ignore[attr-defined]
 
 
 def _format_time(seconds: float) -> str:

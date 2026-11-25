@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 # Copyright (C) 2026 University of Arizona and University Corporation for Atmospheric Research
 # SPDX-License-Identifier: Apache-2.0
 """Applies Numba-compiled parameterization functions over array-backed variables.

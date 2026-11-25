@@ -96,10 +96,4 @@ model_top_ozone_flux = VariableDefinition(
     "mol m-2 s-1",
     "Downward ozone flux at the model top",
 )
-time_step = VariableDefinition(
-    "time_step",
-    GridShape.DOMAIN,
-    "float",
-    "s",
-    "Model time step"
-)
+time_step = VariableDefinition("time_step", GridShape.DOMAIN, "float", "s", "Model time step")

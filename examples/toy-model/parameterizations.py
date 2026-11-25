@@ -11,17 +11,19 @@ import math
 
 import variables
 
-from quacs import QuacsState, VariableSpec, attach_variables
+from quacs import QuacsState, attach_variables
 from quacs.accessors import Column, InterfaceVariable, Variable, above, below, lower, upper
 
 
-@attach_variables([
-    variables.temperature.update(),
-    variables.cos_solar_zenith_angle.read_only(),
-    variables.column_heating.own(),
-    variables.is_daytime.own(),
-    variables.time_step.read_only(),
-])
+@attach_variables(
+    [
+        variables.temperature.update(),
+        variables.cos_solar_zenith_angle.read_only(),
+        variables.column_heating.own(),
+        variables.is_daytime.own(),
+        variables.time_step.read_only(),
+    ]
+)
 class HeatingScheme:
     """Raises `temperature` in every grid cell, in proportion to the sunlight on its column,
     and records the net heating of each column."""
@@ -76,14 +78,17 @@ class HeatingScheme:
             start="surface",
         )
 
-@attach_variables([
-    variables.ozone.own(),
-    variables.actinic_flux.own(),
-    variables.absorbed_flux.own(),
-    variables.temperature.read_only(),
-    variables.chemistry_updates.own(),
-    variables.is_daytime.read_only(),
-])
+
+@attach_variables(
+    [
+        variables.ozone.own(),
+        variables.actinic_flux.own(),
+        variables.absorbed_flux.own(),
+        variables.temperature.read_only(),
+        variables.chemistry_updates.own(),
+        variables.is_daytime.read_only(),
+    ]
+)
 class OzoneChemistry:
     """Produces and removes `ozone` in every grid cell.
 
@@ -155,13 +160,16 @@ class OzoneChemistry:
             lower("actinic_flux"),
         )
 
-@attach_variables([
-    variables.ozone_flux.own(),
-    variables.surface_ozone_flux.own(),
-    variables.model_top_ozone_flux.own(),
-    variables.ozone.read_only(),
-    variables.surface_wind_speed.read_only(),
-])
+
+@attach_variables(
+    [
+        variables.ozone_flux.own(),
+        variables.surface_ozone_flux.own(),
+        variables.model_top_ozone_flux.own(),
+        variables.ozone.read_only(),
+        variables.surface_wind_speed.read_only(),
+    ]
+)
 class SurfaceDeposition:
     """Calculates the downward flux of ozone through every interface: mixing between grid
     cells, and deposition at the surface."""

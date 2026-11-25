@@ -82,7 +82,7 @@ class _Accessor:
         """Whether there is a grid cell or interface at the variable's location."""
         if self._level_offset is None:
             return True
-        return 0 <= self._cursor.level + self._level_offset < self._array.shape[1]
+        return bool(0 <= self._cursor.level + self._level_offset < self._array.shape[1])
 
     def _index(self) -> tuple[int, int]:
         if self._level_offset is None:

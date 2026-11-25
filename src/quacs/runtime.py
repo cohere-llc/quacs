@@ -16,12 +16,13 @@ from quacs.variables import VariableDefinition, VariableSpec, host_name_map
 
 class Runtime:
     """Runs a set of parameterizations on a host application.
-    
+
     `hooks` gives the names of the parameterizations to run for each hook label, in order.
 
     `names` gives a mapping from VariableDefinitions used by the current set of QUACS
     parameterizations to the host applications variable names, when they differ.
     """
+
     def __init__(
         self,
         host_adapter: HostAdapter,

@@ -28,6 +28,7 @@ _STORAGE_TYPES = {"float": np.float64, "int": np.int32, "bool": np.bool_}
 HEIGHT = VariableDefinition("height", GridShape.CELL, "float", "m", "Height of a grid cell")
 NAMES = {HEIGHT: "z"}
 
+
 class Host(ArrayHostAdapter):
     """A host that stores every variable in the standard layout, and has a height."""
 
@@ -109,7 +110,9 @@ def test_unzeroed_variables_fail() -> None:
 
 def test_upside_down_levels_fail_only_the_vertical_order() -> None:
     checks = [*default_checks(), VerticalOrderCheck(HEIGHT, increases_upward=True)]
-    assert failures(run_conformance(UpsideDownHost(), checks, names=NAMES)) == {"quacs_check_vertical_order"}
+    assert failures(run_conformance(UpsideDownHost(), checks, names=NAMES)) == {
+        "quacs_check_vertical_order"
+    }
 
 
 def test_decreasing_variable_passes() -> None:
@@ -140,12 +143,14 @@ def test_values_lost_between_runs_fail() -> None:
     assert "quacs_check_cell_visits" in failures(report)
     assert "expected 2, found 1" in str(report)
 
+
 def test_owned_variable_can_have_another_name_in_the_host() -> None:
     host = Host()
     level = VariableDefinition("quacs_check_level", GridShape.CELL, "int", "1", "")
     assert run_conformance(host, names={level: "host_level"}).passed
     assert "host_level" in host.grid_shapes()
     assert "quacs_check_level" not in host.grid_shapes()
+
 
 def test_vertical_order_needs_a_float_variable_with_one_value_per_cell() -> None:
     surface_height = VariableDefinition("surface_height", GridShape.COLUMN, "float", "m", "")

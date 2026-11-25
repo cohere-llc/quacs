@@ -46,7 +46,7 @@ from quacs.variables import Permissions, VariableSpec, host_name_map
 
 class Storage(IntEnum):
     """How the host application stores the values of a variable.
-    
+
     The numbers match `quacs_storage` in `quacs_embed.h`.
     """
 
@@ -101,9 +101,7 @@ class _Memory:
 class BoundHostAdapter(ArrayHostAdapter):
     """A host adapter for variables that stay in the memory of the host application."""
 
-    def __init__(
-        self, ncolumns: int, nlevels: int, compiled: bool = True
-    ) -> None:
+    def __init__(self, ncolumns: int, nlevels: int, compiled: bool = True) -> None:
         super().__init__(ncolumns, nlevels, compiled=compiled)
         self._arrays: dict[str, np.ndarray] = {}
         self._shapes: dict[str, GridShape] = {}
@@ -123,7 +121,7 @@ class BoundHostAdapter(ArrayHostAdapter):
     def bind(self, spec: VariableSpec, array: np.ndarray) -> None:
         """Uses `array` as the variable described by `spec`, replacing and previously
         associated array.
-        
+
         Raises `ValueError` if the array does not have the variable's shape or type. The
         variable is then left without an associated array.
         """
@@ -138,7 +136,7 @@ class BoundHostAdapter(ArrayHostAdapter):
 
 class EmbeddedRuntime:
     """Everything QUACS knows about the current simulation in a host application.
-    
+
     The host application uses instances of this class as follows, in order:
 
     1. Create an instance of `EmbeddedRuntime` with the configuration defining the
@@ -153,7 +151,7 @@ class EmbeddedRuntime:
     """
 
     def __init__(self, config_path: str | Path) -> None:
-        config = _load_config(config_path)
+        config = _load_config(str(config_path))
         self._parameterizations = config.parameterizations
         self._names = config.names
         self._compiled = config.compiled
@@ -168,7 +166,7 @@ class EmbeddedRuntime:
     def variables(self) -> list[VariableSpec]:
         """Returns the variables used by the configured parameterizations, one for each
         host name.
-        
+
         The host application must create each variable that has `OWN` permissions, and
         must already have every other one. After this, no more names can be mapped.
         """
@@ -179,7 +177,7 @@ class EmbeddedRuntime:
     def variable_info(self, index: int) -> tuple[str, str, str, int, int, int, bool]:
         """Describes a variable in the form the C interface uses."""
         spec = self.variables()[index]
-        return(
+        return (
             spec.name,
             spec.units,
             spec.description,
@@ -191,7 +189,7 @@ class EmbeddedRuntime:
 
     def set_grid(self, ncolumns: int, nlevels: int) -> None:
         """Sets the number of columns and number of grid cells per column.
-        
+
         This cannot change after being set.
         """
         if self._host is not None:
@@ -210,14 +208,14 @@ class EmbeddedRuntime:
         level_stride: int = 0,
     ) -> None:
         """Associates a host-owned in-memory array with a QUACS variable.
-        
+
         `address` is where the value for the first column is, at the surface for variables
         that are per-grid-cell or per-interface.
         `column_stride` and `level_stride` are the distances in bytes from `address` to
         the next column and next level up, respectively. Either can be negative. `level_stride`
         is ignored for a variable without levels; both strides are ignored for variables with
         one value for the entire domain.
-        
+
         A `bool` variable can be stored as integers that are 0 (false) or 1 (true).
         """
         host = self._grid()
@@ -278,7 +276,7 @@ class _Config:
 
 def _load_config(path: str) -> _Config:
     """Runs a QUACS configuration script and returns its parameterizations, hooks, and `compiled`.
-    
+
     The folder of the file is added to the module search path, so that the file can
     import parameterizations that are kept alongside it.
     """
@@ -287,7 +285,7 @@ def _load_config(path: str) -> _Config:
         sys.path.insert(0, folder)
     try:
         config = runpy.run_path(str(path))
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001
         raise HostConfigError(
             f"The configuration file '{path}' could not be run: {type(error).__name__}: {error}"
         )
@@ -306,6 +304,7 @@ def _load_config(path: str) -> _Config:
         names,
         bool(config.get("compiled", True)),
     )
+
 
 def _merge(specs: list[VariableSpec]) -> dict[str, VariableSpec]:
     """Combines the requests for each variable into one, keeping the strongest permissions."""

@@ -46,26 +46,21 @@ own variable names and defines each variable once in a common `variables.py`
 file, like this:
 
 ```python
-temperature = VariableDefinition(
-  "temperature",
-  GridShape.CELL,
-  "float",
-  "K",
-  "Air temperature"
-)
+temperature = VariableDefinition("temperature", GridShape.CELL, "float", "K", "Air temperature")
 ```
 
 Each parameterization requests the variables it uses, with the permissions it needs:
 
 ```python
-@attach_variables([
+@attach_variables(
+    [
         variables.temperature.update(),
         variables.cos_solar_zenith_angle.read_only(),
         variables.column_heating.own(),
-])
+    ]
+)
 class MyParameterization:
-  def run(self, state: QuacsState) -> None:
-    ...
+    def run(self, state: QuacsState) -> None: ...
 ```
 
 The configuration file can optionally provide a mapping between the variable names
