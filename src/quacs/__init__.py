@@ -9,7 +9,7 @@ from .parameterization import Parameterization
 from .registry import ParameterizationRegistry
 from .runtime import Runtime
 from .state import QuacsState
-from .variables import VariableDefinition, VariableSpec
+from .variables import VariableDefinition, VariableSpec, attach_variables
 
 __version__ = "0.1.0"
 
@@ -23,6 +23,7 @@ __all__ = [
     "VariableDefinition",
     "VariableSpec",
     "accessors",
+    "attach_variables",
     "exceptions",
     "shapes",
 ]

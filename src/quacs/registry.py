@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from quacs.exceptions import NameConflictError, OverwriteVariableError, ReadOnlyVariableError
 from quacs.parameterization import Parameterization
 from quacs.shapes import GridShape
-from quacs.variables import Permissions, VariableSpec
+from quacs.variables import Permissions, VariableSpec, requested_variables
 
 
 class ParameterizationRegistry:
@@ -32,7 +32,7 @@ class ParameterizationRegistry:
             raise NameConflictError(
                 f"Multiple parameterizations with the name '{parameterization.name}'"
             )
-        vars = parameterization.register_variables()
+        vars = requested_variables(parameterization)
         for var in vars:
             if var.shape == GridShape.DOMAIN and var.permissions is not Permissions.READ_ONLY:
                 raise ReadOnlyVariableError(

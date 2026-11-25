@@ -32,19 +32,16 @@ names = {{height: "z"}}
 
 # A parameterization that multiplies a host variable by a value the host application sets.
 SCALING = """
-from quacs import VariableSpec
+from quacs import VariableSpec, attach_variables
 from quacs.shapes import GridShape
 from quacs.variables import Permissions
 
-
+@attach_variables([
+    VariableSpec("factor", GridShape.DOMAIN, "float", "1", "", Permissions.READ_ONLY),
+    VariableSpec("ozone", GridShape.CELL, "float", "1", "", Permissions.UPDATE),
+])
 class Scaling:
     name = "scaling"
-
-    def register_variables(self):
-        return [
-            VariableSpec("factor", GridShape.DOMAIN, "float", "1", "", Permissions.READ_ONLY),
-            VariableSpec("ozone", GridShape.CELL, "float", "1", "", Permissions.UPDATE),
-        ]
 
     def run(self, state):
         def scale(ozone, factor):
@@ -215,16 +212,16 @@ def test_conflicting_requests_are_reported(tmp_path: Path) -> None:
     conflict = SCALING.replace(
         "parameterizations = [Scaling()]",
         """
-from quacs import VariableDefinition
+from quacs import VariableDefinition, attach_variables
 
 flux = VariableDefinition("flux", GridShape.INTERFACE, "float", "1", "")
 
 
+@attach_variables([
+    flux.own(),
+])
 class Other:
     name = "other"
-
-    def register_variables(self):
-        return [flux.own()]
 
     def run(self, state):
         pass

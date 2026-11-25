@@ -25,7 +25,13 @@ from quacs.parameterization import Parameterization
 from quacs.registry import ParameterizationRegistry
 from quacs.shapes import GridShape
 from quacs.state import QuacsState
-from quacs.variables import Permissions, VariableDefinition, VariableSpec, host_name_map
+from quacs.variables import (
+    Permissions,
+    VariableDefinition,
+    VariableSpec,
+    host_name_map,
+    requested_variables,
+)
 
 _ZEROS: dict[str, Scalar] = {"float": 0.0, "int": 0, "bool": False}
 
@@ -160,7 +166,7 @@ def profile(
     """
     if samples < 2:
         raise ValueError("At least two samples are needed to calculate a standard deviation.")
-    specs = {spec.name: spec for spec in parameterization.register_variables()}
+    specs = {spec.name: spec for spec in requested_variables(parameterization)}
     _check_ranges(parameterization.name, specs, ranges)
 
     registry = ParameterizationRegistry()

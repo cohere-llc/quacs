@@ -10,7 +10,7 @@ requested permissions is stored in `VariableSpec` instances.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Literal
@@ -175,3 +175,32 @@ def host_name_map(names: Mapping[VariableDefinition, str] | None) -> dict[str, s
                 f"application: '{host_names[definition.name]}' and '{host_name}'."
             )
     return host_names
+
+
+def attach_variables[T](variables: list[VariableSpec]) -> Callable[[type[T], type[T]]]:
+    """Attaches variables with specified permissions to a Parameterization.
+    
+    Example usage:
+    ```
+    @attach_variables([variables.foo.read_only(), variables.bar.own()])
+    class MyParam:
+        def run(self, state: QuacsState) -> None:
+            # reads foo and sets bar
+            ...
+    """
+
+    def decorator(cls: type[T]) -> type[T]:
+        def register_variables(self) -> list[VariableSpec]:
+            return list(variables)
+        setattr(cls, "register_variables", register_variables)  # noqa: B010
+
+        return cls
+    return decorator
+
+
+def requested_variables(parameterization: object) -> list[VariableSpec]:
+    """Returns the variables that a parameterization requests."""
+    register_variables = getattr(parameterization, "register_variables", None)
+    if register_variables is None:
+        return []
+    return list(register_variables())

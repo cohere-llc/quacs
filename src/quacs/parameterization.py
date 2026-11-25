@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from quacs.state import QuacsState
-from quacs.variables import VariableSpec
 
 
 @runtime_checkable
@@ -22,10 +21,6 @@ class Parameterization(Protocol):
     """
 
     name: str
-
-    def register_variables(self) -> list[VariableSpec]:
-        """Return the set of state variables used by the parameterization."""
-        ...
 
     def run(self, state: QuacsState) -> None:
         """Run this parameterization for the current state.

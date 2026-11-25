@@ -11,10 +11,17 @@ import math
 
 import variables
 
-from quacs import QuacsState, VariableSpec
+from quacs import QuacsState, VariableSpec, attach_variables
 from quacs.accessors import Column, InterfaceVariable, Variable, above, below, lower, upper
 
 
+@attach_variables([
+    variables.temperature.update(),
+    variables.cos_solar_zenith_angle.read_only(),
+    variables.column_heating.own(),
+    variables.is_daytime.own(),
+    variables.time_step.read_only(),
+])
 class HeatingScheme:
     """Raises `temperature` in every grid cell, in proportion to the sunlight on its column,
     and records the net heating of each column."""
@@ -24,15 +31,6 @@ class HeatingScheme:
     def __init__(self, heating_rate: float = 3.0) -> None:
         """`heating_rate` is the temperature increase under an overhead sun, in K per hour."""
         self._heating_rate = heating_rate
-
-    def register_variables(self) -> list[VariableSpec]:
-        return [
-            variables.temperature.update(),
-            variables.cos_solar_zenith_angle.read_only(),
-            variables.column_heating.own(),
-            variables.is_daytime.own(),
-            variables.time_step.read_only(),
-        ]
 
     def run(self, state: QuacsState) -> None:
         def heat(
@@ -78,7 +76,14 @@ class HeatingScheme:
             start="surface",
         )
 
-
+@attach_variables([
+    variables.ozone.own(),
+    variables.actinic_flux.own(),
+    variables.absorbed_flux.own(),
+    variables.temperature.read_only(),
+    variables.chemistry_updates.own(),
+    variables.is_daytime.read_only(),
+])
 class OzoneChemistry:
     """Produces and removes `ozone` in every grid cell.
 
@@ -98,16 +103,6 @@ class OzoneChemistry:
         self._production_rate = production_rate
         self._loss_fraction = loss_fraction
         self._attenuation = attenuation
-
-    def register_variables(self) -> list[VariableSpec]:
-        return [
-            variables.ozone.own(),
-            variables.actinic_flux.own(),
-            variables.absorbed_flux.own(),
-            variables.temperature.read_only(),
-            variables.chemistry_updates.own(),
-            variables.is_daytime.read_only(),
-        ]
 
     def run(self, state: QuacsState) -> None:
         production_rate = self._production_rate
@@ -160,7 +155,13 @@ class OzoneChemistry:
             lower("actinic_flux"),
         )
 
-
+@attach_variables([
+    variables.ozone_flux.own(),
+    variables.surface_ozone_flux.own(),
+    variables.model_top_ozone_flux.own(),
+    variables.ozone.read_only(),
+    variables.surface_wind_speed.read_only(),
+])
 class SurfaceDeposition:
     """Calculates the downward flux of ozone through every interface: mixing between grid
     cells, and deposition at the surface."""
@@ -170,15 +171,6 @@ class SurfaceDeposition:
     def __init__(self, deposition_velocity: float = 0.01, mixing_rate: float = 0.1) -> None:
         self._deposition_velocity = deposition_velocity
         self._mixing_rate = mixing_rate
-
-    def register_variables(self) -> list[VariableSpec]:
-        return [
-            variables.ozone_flux.own(),
-            variables.surface_ozone_flux.own(),
-            variables.model_top_ozone_flux.own(),
-            variables.ozone.read_only(),
-            variables.surface_wind_speed.read_only(),
-        ]
 
     def run(self, state: QuacsState) -> None:
         deposition_velocity = self._deposition_velocity

@@ -58,12 +58,14 @@ temperature = VariableDefinition(
 Each parameterization requests the variables it uses, with the permissions it needs:
 
 ```python
-def register_variables(self) -> list[VariableSpec]:
-    return [
+@attach_variables([
         variables.temperature.update(),
         variables.cos_solar_zenith_angle.read_only(),
         variables.column_heating.own(),
-    ]
+])
+class MyParameterization:
+  def run(self, state: QuacsState) -> None:
+    ...
 ```
 
 The configuration file can optionally provide a mapping between the variable names
