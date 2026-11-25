@@ -10,6 +10,7 @@ requested permissions is stored in `VariableSpec` instances.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Literal
@@ -139,3 +140,38 @@ class VariableSpec:
     permissions: Permissions
     requested_by: str | None = None
     transported: bool = False
+
+
+def host_name_map(names: Mapping[VariableDefinition, str] | None) -> dict[str, str]:
+    """Returns a host application's names for variable, keyed with the names the
+    parameterizations use.
+    
+    `names` gives a mapping from the variable names used by QUACS parameterizations
+    to the host variable names, when they differ:
+
+    ```
+    names = {variables.temperature: "t_host"}
+    ```
+
+    Raises `TypeError` if a key is not a `VariableDefinition` or a host name is not
+    a string, and `ValueError` if a variable is given two different host names.
+    """
+    host_names: dict[str, str] = {}
+    if names is None:
+        return host_names
+    if not isinstance(names, Mapping):
+        raise TypeError(f"`names` must be a dict, not {type(names).__name__}.")
+    for definition, host_name in names.items():
+        if not isinstance(definition, VariableDefinition) \
+            or not isinstance(host_name, str):
+            raise TypeError(
+                f"`names` must give the host application's name for a variable "
+                f"as a string, for a QUACS VariableDefinition. It has "
+                f"{definition!r}: {host_name!r}"
+            )
+        if host_names.setdefault(definition.name, host_name) != host_name:
+            raise ValueError(
+                f"Variable '{definition.name}' is mapped to two names in the host "
+                f"application: '{host_names[definition.name]}' and '{host_name}'."
+            )
+    return host_names

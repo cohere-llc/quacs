@@ -11,7 +11,7 @@ from quacs.host_adapter import HostAdapter
 from quacs.parameterization import Parameterization
 from quacs.registry import ParameterizationRegistry
 from quacs.state import QuacsState
-from quacs.variables import VariableSpec
+from quacs.variables import VariableDefinition, VariableSpec, host_name_map
 
 
 class Runtime:
@@ -19,7 +19,7 @@ class Runtime:
     
     `hooks` gives the names of the parameterizations to run for each hook label, in order.
 
-    `names` gives a mapping from variables names used by the current set of QUACS
+    `names` gives a mapping from VariableDefinitions used by the current set of QUACS
     parameterizations to the host applications variable names, when they differ.
     """
     def __init__(
@@ -27,10 +27,10 @@ class Runtime:
         host_adapter: HostAdapter,
         parameterizations: list[Parameterization],
         hooks: dict[str, list[str]],
-        names: Mapping[str, str] | None = None,
+        names: Mapping[VariableDefinition, str] | None = None,
     ) -> None:
         self._host_adapter = host_adapter
-        self._names = dict(names or {})
+        self._names = host_name_map(names)
         self._registry = ParameterizationRegistry()
         for param in parameterizations:
             self._registry.register(param)
@@ -41,5 +41,5 @@ class Runtime:
         return self._registry.collect_variable_specs(self._names)
 
     def run_hook(self, label: str) -> None:
-        state = QuacsState(self._host_adapter, self._names or {})
+        state = QuacsState(self._host_adapter, self._names)
         self._dispatcher.run(label, state)

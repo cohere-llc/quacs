@@ -18,6 +18,7 @@ be defined.
 
 from __future__ import annotations
 
+import variables
 from parameterizations import HeatingScheme, OzoneChemistry, SurfaceDeposition
 
 parameterizations = [HeatingScheme(), OzoneChemistry(), SurfaceDeposition()]
@@ -27,4 +28,4 @@ hooks = {
     "after_dynamics": ["ozone_chemistry", "surface_deposition"],
 }
 
-names = {"temperature": "t_host"}
+names = {variables.temperature: "t_host"}

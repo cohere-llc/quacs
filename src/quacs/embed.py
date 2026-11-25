@@ -14,7 +14,7 @@ The simulation is described by a Python configuration file that defines:
 
 The configuration can also define:
 
-- `names`: a `dict` that gives a mapping between variable names used by the current set of
+- `names`: a `dict` that gives a mapping between VariableDefinitions used by the current set of
            QUACS parameterizations to host application variable names, when they differ.
 - `compiled`: `False` to run parameterization functions without Numba compilation.
 
@@ -41,7 +41,7 @@ from quacs.parameterization import Parameterization
 from quacs.registry import ParameterizationRegistry
 from quacs.shapes import GridShape
 from quacs.state import QuacsState
-from quacs.variables import Permissions, VariableSpec
+from quacs.variables import Permissions, VariableSpec, host_name_map
 
 
 class Storage(IntEnum):
@@ -296,20 +296,14 @@ def _load_config(path: str) -> _Config:
         raise HostConfigError(
             f"The configuration file '{path}' does not define: {', '.join(missing)}."
         )
-    names = config.get("names", {})
-    if not isinstance(names, dict) or not all(
-        isinstance(name, str) and isinstance(host_name, str) for name, host_name in names.items()
-    ):
-        raise HostConfigError(
-            f"In the configuration file '{path}', `names` must be a dict that gives a "
-            f"mapping between the variable names used by the configured set of QUACS "
-            f"parameterizations and the host application variable names, when they "
-            f"differ, as strings."
-        )
+    try:
+        names = host_name_map(config.get("names"))
+    except (TypeError, ValueError) as error:
+        raise HostConfigError(f"In the configuration file '{path}': {error}") from error
     return _Config(
         list(config["parameterizations"]),
         dict(config["hooks"]),
-        dict(names),
+        names,
         bool(config.get("compiled", True)),
     )
 

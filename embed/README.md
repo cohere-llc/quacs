@@ -67,7 +67,7 @@ The configuration script is a Python file that names the parameterizations for a
 the hooks the run in:
 
 ```python
-from my_parameterizations import OzoneChemistry, SurfaceDeposition
+from my_parameterizations import OzoneChemistry, SurfaceDeposition, variables
 
 parameterizations = [OzoneChemistry(), SurfaceDeposition()]
 hooks = {
@@ -75,12 +75,12 @@ hooks = {
     "after_physics": ["ozone_chemistry", "surface_deposition"],
 }
 names = {
-    "temperature": "t_host",
-    "ozone": "O3",
+    variables.temperature: "t_host",
+    variables.ozone: "O3",
 }
 ```
 
-`names` is optional. It provides a mapping between the variable names used by the
+`names` is optional. It provides a mapping between the `VariableDefinition`s used by the
 configured set of parameterizations and the host application variable names, when
 they differ.
 

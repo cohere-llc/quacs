@@ -23,6 +23,9 @@ from parameterizations import OzoneChemistry
 
 from quacs.registry import ParameterizationRegistry
 from quacs.state import QuacsState
+from quacs.variables import host_name_map
+
+NAMES = host_name_map(config.names)
 
 NLEVELS = 50
 COLUMN_COUNTS = (100, 1_000, 10_000, 100_000)
@@ -94,7 +97,7 @@ def new_host(ncolumns, nlevels):
     host = ToyHostAdapter(ncolumns, nlevels)
     registry = ParameterizationRegistry()
     registry.register(new_chemistry())
-    host.create_variables(registry.collect_variable_specs(config.names))
+    host.create_variables(registry.collect_variable_specs(NAMES))
     rng = np.random.default_rng(0)
     host.view("ozone")[...] = rng.uniform(0.0, 1.0, (ncolumns, nlevels))
     host.view("t_host")[...] = rng.uniform(200.0, 320.0, (ncolumns, nlevels))
@@ -126,7 +129,7 @@ def check_reference():
     """Check that the hand-written loops give the same results as the parameterization."""
     quacs_host = new_host(100, NLEVELS)
     reference_host = new_host(100, NLEVELS)
-    new_chemistry().run(QuacsState(quacs_host, config.names))
+    new_chemistry().run(QuacsState(quacs_host, NAMES))
     arguments = reference_arguments(reference_host)
     for name in OPERATIONS:
         REFERENCES[name](*arguments[name])
@@ -139,7 +142,7 @@ def check_reference():
 def time_quacs(host, repeats):
     """Returns the fastest whole run, and the fastest time of each operation, in seconds."""
     timing = TimingHost(host)
-    state = QuacsState(timing, config.names)
+    state = QuacsState(timing, NAMES)
     chemistry = new_chemistry()
     chemistry.run(state)  # compiles the functions
     timing.times.clear()

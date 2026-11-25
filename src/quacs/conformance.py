@@ -29,7 +29,7 @@ from quacs.exceptions import ReadOnlyVariableError
 from quacs.runtime import Runtime
 from quacs.shapes import GridShape
 from quacs.state import QuacsState
-from quacs.variables import DType, Permissions, VariableSpec
+from quacs.variables import DType, Permissions, VariableDefinition, VariableSpec, host_name_map
 
 # Returns a host variable by name, in the standard layout of `ArrayHostAdapter.view`.
 type View = Callable[[str], np.ndarray]
@@ -483,27 +483,24 @@ class VerticalOrderCheck:
 
     This is the only check that can tell whether the host application has its levels
     upside down. `variable` is the name of a `float` variable with one value per grid
-    cell.
+    cell. The host application's name for it can be given in `names`.
     """
 
     name = "quacs_check_vertical_order"
 
-    def __init__(self, variable: str, units: str, increases_upward: bool) -> None:
+    def __init__(self, variable: VariableDefinition, increases_upward: bool) -> None:
+        if variable.shape is not GridShape.CELL or variable.dtype != "float":
+            raise ValueError(
+                f"Variable '{variable.name}' cannot be used to check the vertical order. "
+                f"A float variable with one value per grid cell is needed."
+            )
         self.runs = 0
         self._variable = variable
-        self._units = units
         self._increases_upward = increases_upward
 
     def register_variables(self) -> list[VariableSpec]:
         return [
-            VariableSpec(
-                self._variable,
-                GridShape.CELL,
-                "float",
-                self._units,
-                "A variable that changes in one direction with height",
-                Permissions.READ_ONLY,
-            ),
+            self._variable.read_only(),
             _own("quacs_check_vertical_order", GridShape.COLUMN, "bool", "Whether it does"),
         ]
 
@@ -523,7 +520,7 @@ class VerticalOrderCheck:
 
         state.for_each_column(
             compare,
-            self._variable,
+            self._variable.name,
             "quacs_check_vertical_order",
             1.0 if self._increases_upward else -1.0,
         )
@@ -534,7 +531,7 @@ class VerticalOrderCheck:
         expected: Expected = {
             "quacs_check_vertical_order": (
                 True,
-                f"'{self._variable}' {direction} from the surface to the model top",
+                f"'{self._variable.name}' {direction} from the surface to the model top",
             )
         }
         return _compare(view, self.runs, expected)
@@ -564,7 +561,7 @@ def run_conformance(
     host: ArrayHostAdapter,
     checks: Iterable[Check] | None = None,
     runs: int = 3,
-    names: Mapping[str, str] | None = None,
+    names: Mapping[VariableDefinition, str] | None = None,
 ) -> ConformanceReport:
     """Runs `checks` on `host` and reports the outcome.
 
@@ -577,7 +574,7 @@ def run_conformance(
     parameterizations and the host application's variable names, when they differ.
     """
     checks = default_checks() if checks is None else list(checks)
-    names = dict(names or {})
+    name_map = host_name_map(names)
     runtime = Runtime(
         host,
         [*checks],
@@ -587,7 +584,7 @@ def run_conformance(
     host.allocate_registered_variables(runtime.register_variables())
 
     def view(name: str) -> np.ndarray:
-        return host.view(names.get(name, name))
+        return host.view(name_map.get(name, name))
 
     owned = [
         spec.name

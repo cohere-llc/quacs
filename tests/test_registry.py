@@ -9,7 +9,7 @@ import pytest
 from quacs import QuacsState, VariableDefinition, VariableSpec
 from quacs.registry import ParameterizationRegistry
 from quacs.shapes import GridShape
-from quacs.variables import DType, Permissions
+from quacs.variables import DType, Permissions, host_name_map
 
 
 class OneVariable:
@@ -74,8 +74,24 @@ def test_names_give_the_host_names_of_variables() -> None:
     registry = ParameterizationRegistry()
     registry.register(OneVariable(temperature.read_only(), "first"))
     registry.register(OneVariable(ozone.own(), "second"))
-    specs = registry.collect_variable_specs({"temperature": "t_host", "not_used": "other"})
+    not_used = VariableDefinition("not_used", GridShape.CELL, "float", "1", "Not used")
+    names = host_name_map({temperature: "t_host", not_used: "other"})
+    assert names == {"temperature": "t_host", "not_used": "other"}
+    specs = registry.collect_variable_specs(names)
     assert [spec.name for spec in specs] == ["ozone", "t_host"]
+
+
+def test_names_must_be_given_by_variable_definition() -> None:
+    kelvin = VariableDefinition("temperature", GridShape.CELL, "float", "K", "Temperature")
+    celsius = VariableDefinition("temperature", GridShape.CELL, "float", "degC", "Temperature")
+    assert host_name_map(None) == {}
+    assert host_name_map({kelvin: "t_host", celsius: "t_host"}) == {"temperature": "t_host"}
+    with pytest.raises(TypeError, match="for a QUACS VariableDefinition"):
+        host_name_map({"temperature": "t_host"})  # type: ignore[dict-item]
+    with pytest.raises(TypeError, match="for a QUACS VariableDefinition"):
+        host_name_map({kelvin: None})  # type: ignore[dict-item]
+    with pytest.raises(ValueError, match="'temperature' is mapped to two names"):
+        host_name_map({kelvin: "t_host", celsius: "t_air"})
 
 
 def test_different_definitions_of_one_name_are_reported() -> None:

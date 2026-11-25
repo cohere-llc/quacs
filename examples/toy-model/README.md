@@ -72,7 +72,7 @@ names. For example, the toy model uses `t_host` for the `temperature` variable
 used by the toy set of parameterizations:
 
 ```python
-names = {"temperature": "t_host"}
+names = {variables.temperature: "t_host"}
 ```
 
 A variable that is not in `names` has the same name in the host as in the

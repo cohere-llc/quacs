@@ -25,7 +25,7 @@ from quacs.parameterization import Parameterization
 from quacs.registry import ParameterizationRegistry
 from quacs.shapes import GridShape
 from quacs.state import QuacsState
-from quacs.variables import Permissions, VariableSpec
+from quacs.variables import Permissions, VariableDefinition, VariableSpec, host_name_map
 
 _ZEROS: dict[str, Scalar] = {"float": 0.0, "int": 0, "bool": False}
 
@@ -142,7 +142,7 @@ def profile(
     ranges: dict[str, tuple[float, float]],
     samples: int = 50,
     seed: int = 0,
-    names: Mapping[str, str] | None = None,
+    names: Mapping[VariableDefinition, str] | None = None,
 ) -> ProfileReport:
     """Runs `parameterization` on `host` for `samples` different starting conditions and
     reports back timing and results.
@@ -165,16 +165,16 @@ def profile(
 
     registry = ParameterizationRegistry()
     registry.register(parameterization)
-    names = dict(names or {})
-    host_specs = registry.collect_variable_specs(names)
+    name_map = host_name_map(names)
+    host_specs = registry.collect_variable_specs(name_map)
     host.create_variables(host_specs)
 
-    state = QuacsState(host, names)
+    state = QuacsState(host, name_map)
     grid_cells = host.grid_cell_count()
     sampled = [spec for spec in specs.values() if _is_sampled(spec, ranges)]
     starting_values = _sample(sampled, ranges, samples, np.random.default_rng(seed))
 
-    host_names = {name: names.get(name, name) or name for name in specs}
+    host_names = {name: name_map.get(name, name) or name for name in specs}
 
     def start_from(sample: int) -> None:
         for name, spec in specs.items():
@@ -187,7 +187,7 @@ def profile(
     # host that compiles them the chance to do so.
     recorder = _RecordingHost(host)
     start_from(0)
-    parameterization.run(QuacsState(recorder, names))
+    parameterization.run(QuacsState(recorder, name_map))
 
     times = np.empty(samples)
     ending_means = {name: np.empty(samples) for name in specs}

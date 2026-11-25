@@ -18,12 +18,16 @@ NCOLUMNS = 5
 NLEVELS = 4
 
 CHECKS = """
+from quacs import VariableDefinition
 from quacs.conformance import VerticalOrderCheck, default_checks
+from quacs.shapes import GridShape
 
-parameterizations = [*default_checks(), VerticalOrderCheck("height", "m", increases_upward=True)]
+height = VariableDefinition("height", GridShape.CELL, "float", "m", "Height of the grid cell")
+
+parameterizations = [*default_checks(), VerticalOrderCheck(height, increases_upward=True)]
 hooks = {{"step": [check.name for check in parameterizations]}}
 compiled = {compiled}
-names = {{"height": "z"}}
+names = {{height: "z"}}
 """
 
 # A parameterization that multiplies a host variable by a value the host application sets.
@@ -203,7 +207,7 @@ def test_bad_configuration_files_are_reported(tmp_path: Path) -> None:
         EmbeddedRuntime(write(tmp_path, "parameterizations = missing"))
     with pytest.raises(HostConfigError, match="could not be run: FileNotFoundError"):
         EmbeddedRuntime(str(tmp_path / "missing.py"))
-    with pytest.raises(HostConfigError, match="`names` must be a dict"):
+    with pytest.raises(HostConfigError, match="for a QUACS VariableDefinition"):
         EmbeddedRuntime(write(tmp_path, "parameterizations = []\nhooks = {}\nnames = {'a': 1}"))
 
 
@@ -211,18 +215,23 @@ def test_conflicting_requests_are_reported(tmp_path: Path) -> None:
     conflict = SCALING.replace(
         "parameterizations = [Scaling()]",
         """
+from quacs import VariableDefinition
+
+flux = VariableDefinition("flux", GridShape.INTERFACE, "float", "1", "")
+
+
 class Other:
     name = "other"
 
     def register_variables(self):
-        return [VariableSpec("flux", GridShape.INTERFACE, "float", "1", "", Permissions.OWN)]
+        return [flux.own()]
 
     def run(self, state):
         pass
 
 
 parameterizations = [Scaling(), Other()]
-names = {"flux": "ozone"}""",
+names = {flux: "ozone"}""",
     )
     runtime = EmbeddedRuntime(write(tmp_path, conflict))
     with pytest.raises(ValueError, match="'ozone' is a INTERFACE float for 'other'"):
