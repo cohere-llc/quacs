@@ -23,6 +23,7 @@ from quacs.conformance import VerticalOrderCheck, default_checks
 parameterizations = [*default_checks(), VerticalOrderCheck("height", "m", increases_upward=True)]
 hooks = {{"step": [check.name for check in parameterizations]}}
 compiled = {compiled}
+names = {{"height": "z"}}
 """
 
 # A parameterization that multiplies a host variable by a value the host application sets.
@@ -90,7 +91,6 @@ def start(
 ) -> tuple[EmbeddedRuntime, dict[str, np.ndarray]]:
     """Runtime for the conformance checks, with every variable created and bound."""
     runtime = EmbeddedRuntime(write(folder, CHECKS.format(compiled=compiled)))
-    runtime.map_name("height", "z")
     runtime.set_grid(NCOLUMNS, NLEVELS)
     memory = {}
     for spec in runtime.variables():
@@ -131,8 +131,8 @@ def test_conformance_checks_pass_in_host_memory(
 
 def test_variables_are_described_for_the_host(tmp_path: Path) -> None:
     runtime = EmbeddedRuntime(write(tmp_path, CHECKS.format(compiled=False)))
-    runtime.map_name("height", "z")
     specs = {spec.name: spec for spec in runtime.variables()}
+    assert "height" not in specs
     assert specs["z"].permissions is Permissions.READ_ONLY
     assert specs["quacs_check_tracer"].permissions is Permissions.OWN
     assert specs["quacs_check_tracer"].transported
@@ -147,8 +147,6 @@ def test_variables_are_described_for_the_host(tmp_path: Path) -> None:
         3,
         True,
     )
-    with pytest.raises(HostConfigError, match="before the variables are listed"):
-        runtime.map_name("temperature", "theta")
 
 
 def test_variable_can_move_in_memory(tmp_path: Path) -> None:
@@ -205,6 +203,8 @@ def test_bad_configuration_files_are_reported(tmp_path: Path) -> None:
         EmbeddedRuntime(write(tmp_path, "parameterizations = missing"))
     with pytest.raises(HostConfigError, match="could not be run: FileNotFoundError"):
         EmbeddedRuntime(str(tmp_path / "missing.py"))
+    with pytest.raises(HostConfigError, match="`names` must be a dict"):
+        EmbeddedRuntime(write(tmp_path, "parameterizations = []\nhooks = {}\nnames = {'a': 1}"))
 
 
 def test_conflicting_requests_are_reported(tmp_path: Path) -> None:
@@ -215,13 +215,14 @@ class Other:
     name = "other"
 
     def register_variables(self):
-        return [VariableSpec("ozone", GridShape.INTERFACE, "float", "1", "", Permissions.OWN)]
+        return [VariableSpec("flux", GridShape.INTERFACE, "float", "1", "", Permissions.OWN)]
 
     def run(self, state):
         pass
 
 
-parameterizations = [Scaling(), Other()]""",
+parameterizations = [Scaling(), Other()]
+names = {"flux": "ozone"}""",
     )
     runtime = EmbeddedRuntime(write(tmp_path, conflict))
     with pytest.raises(ValueError, match="'ozone' is a INTERFACE float for 'other'"):

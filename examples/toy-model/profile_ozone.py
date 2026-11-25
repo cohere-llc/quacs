@@ -8,6 +8,7 @@ Run from the repository root with:
 
 from __future__ import annotations
 
+import config
 import numpy as np
 from host_adapter import ToyHostAdapter
 from parameterizations import OzoneChemistry
@@ -22,11 +23,13 @@ interpreted = profile(
     OzoneChemistry(),
     ToyHostAdapter(NCOLUMNS, NLEVELS, compiled=False),
     RANGES,
+    names=config.names,
 )
 compiled = profile(
     OzoneChemistry(),
     ToyHostAdapter(NCOLUMNS, NLEVELS),
     RANGES,
+    names=config.names,
 )
 
 print("Interpreted")

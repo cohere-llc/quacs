@@ -124,7 +124,6 @@ int main(int argc, char **argv) {
 
     /* Find out which variables the parameterizations use, and create them. */
     must(quacs_initialize(argv[1]));
-    must(quacs_map_name("height", "z"));
     must(quacs_variable_count(&count));
     if (count > MAX_VARIABLES) {
         printf("FAIL  QUACS asked for %d variables\n", count);

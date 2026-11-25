@@ -6,3 +6,4 @@ from quacs.conformance import VerticalOrderCheck, default_checks
 
 parameterizations = [*default_checks(), VerticalOrderCheck("height", "m", increases_upward=True)]
 hooks = {"step": [check.name for check in parameterizations]}
+names = {"height": "z"}

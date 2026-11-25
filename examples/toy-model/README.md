@@ -11,6 +11,7 @@ A small pure-Python "host model" that runs three toy parameterizations through Q
   say which variables the toy model has and where they are. The toy model has a grid of
   4 columns by 3 levels (12 grid cells) and four variables of its own: `t_host`,
   `surface_wind_speed`, `cos_solar_zenith_angle`, and `time_step`.
+- `variables.py`: defines variables used by the set of parameterizations.
 - `parameterizations.py`: three parameterizations that know nothing about the toy model.
   - `HeatingScheme` raises `temperature` in every grid cell, in proportion to the
     sunlight on its column. It records each column's net heating in `column_heating` and
@@ -23,6 +24,9 @@ A small pure-Python "host model" that runs three toy parameterizations through Q
     `ozone_flux`: mixing between grid cells, and deposition at the surface using the toy
     model's `surface_wind_speed`. It records the flux at the surface in
     `surface_ozone_flux` and at the model top in `model_top_ozone_flux`.
+  - `config.py`: the QUACS configuration for a simulation using the toy host. Defines
+    the set of parameterizations and when they run, and maps the parameterization
+    variable names to the host namespace, if needed.
 
 ## Hooks
 
@@ -34,6 +38,47 @@ The toy model hands control to QUACS at two points in each timestep:
 | `after_dynamics`  | `ozone_chemistry`, `surface_deposition` |
 
 Between the two hooks the toy model does its own work, a small cooling of `t_host`.
+
+## Variable Names
+
+QUACS has no standard names. Instead, each set of parameterizations chooses their
+own variable names and defines each variable once in a common `variables.py`
+file, like this:
+
+```python
+temperature = VariableDefinition(
+  "temperature",
+  GridShape.CELL,
+  "float",
+  "K",
+  "Air temperature"
+)
+```
+
+Each parameterization requests the variables it uses, with the permissions it needs:
+
+```python
+def register_variables(self) -> list[VariableSpec]:
+    return [
+        variables.temperature.update(),
+        variables.cos_solar_zenith_angle.read_only(),
+        variables.column_heating.own(),
+    ]
+```
+
+The configuration file can optionally provide a mapping between the variable names
+used by the configured set of parameterizations and the host application variable
+names. For example, the toy model uses `t_host` for the `temperature` variable
+used by the toy set of parameterizations:
+
+```python
+names = {"temperature": "t_host"}
+```
+
+A variable that is not in `names` has the same name in the host as in the
+parameterizations. This way different sets of parameterizations can be swapped into
+a host application, just by providing a new configuration file, even if they
+use a different set of variable names.
 
 ## How parameterizations see the grid
 

@@ -9,7 +9,6 @@
  * The functions are called in this order:
  *
  *   quacs_initialize
- *   quacs_map_name          for each host variable that has a QUACS name
  *   quacs_variable_count
  *   quacs_variable_info     for each variable; the host creates those it does not have
  *   quacs_set_grid
@@ -80,11 +79,7 @@ typedef struct quacs_variable {
  * life of a process. */
 int quacs_initialize(const char *config_path);
 
-/* Returns the host application's name for a QUACS variable. */
-int quacs_map_name(const char *name, const char *host_name);
-
-/* Counts the variables that the parameterizations use. Names can not be mapped after
- * calling this function. */
+/* Counts the variables that the parameterizations use. */
 int quacs_variable_count(int *count);
 
 /* Describes a variable. `index` starts at 0. The host chooses the order of variables. */

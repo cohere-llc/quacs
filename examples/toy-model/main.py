@@ -10,18 +10,13 @@ from __future__ import annotations
 
 import sys
 
+import config
 from host_adapter import NCOLUMNS, NLEVELS, ToyHostAdapter
-from parameterizations import HeatingScheme, OzoneChemistry, SurfaceDeposition
 
 from quacs import Runtime
 
 NUM_TIMESTEPS = 5
 PROFILE_COLUMN = 0
-
-HOOKS = {
-    "before_dynamics": ["heating", "ozone_chemistry"],
-    "after_dynamics": ["ozone_chemistry", "surface_deposition"],
-}
 
 
 def run_dynamics(host: ToyHostAdapter) -> None:
@@ -96,7 +91,7 @@ def profile_rows(host: ToyHostAdapter, column: int) -> list[list[str]]:
 
 def main() -> None:
     host = ToyHostAdapter(compiled="--compiled" in sys.argv)
-    runtime = Runtime(host, [HeatingScheme(), OzoneChemistry(), SurfaceDeposition()], HOOKS)
+    runtime = Runtime(host, config.parameterizations, config.hooks, config.names)
     host.allocate_registered_variables(runtime.register_variables())
 
     means = []

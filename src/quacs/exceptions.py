@@ -54,8 +54,8 @@ class UnknownParameterizationError(QuacsError):
 
 
 class VariableNotFoundError(QuacsError):
-    """Raised when a parameterization requests a variable with `READ_ONLY` or `UPDATE` permissions with no canonical
-    mapping and no direct host-name fallback."""
+    """Raised when a parameterization requests a variable with `READ_ONLY` or `UPDATE` permissions that the host
+    application does not have."""
 
     def __init__(self, name: str, parameterization: str) -> None:
         self.message = f"Variable '{name}' requested by '{parameterization}' cannot be found in the set of host variables."

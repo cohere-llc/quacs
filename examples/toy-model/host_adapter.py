@@ -62,9 +62,6 @@ class ToyHostAdapter(ArrayHostAdapter):
             "time_step": GridShape.DOMAIN,
         }
 
-    def canonical_name_map(self) -> dict[str, str | None]:
-        return {"temperature": "t_host"}
-
     def grid_shapes(self) -> Mapping[str, GridShape]:
         return self._shapes
 

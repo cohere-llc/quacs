@@ -1,9 +1,11 @@
 # Copyright (C) 2026 University of Arizona and University Corporation for Atmospheric Research
 # SPDX-License-Identifier: Apache-2.0
-"""Variable specification.
+"""Variable definition and requests.
 
-Parameterizations register and request variables from a host application using the
-`VariableSpec` class.
+Variables are defined once for a set of parameterizations using `VariableDefinition`. Each
+parameterization requests the variables it needs from the set of defined variables,
+specifying the permissions it needs. The combination of variable definition and
+requested permissions is stored in `VariableSpec` instances.
 """
 
 from __future__ import annotations
@@ -15,6 +17,80 @@ from typing import Literal
 from quacs.shapes import GridShape
 
 DType = Literal["float", "int", "bool"]
+
+
+@dataclass(frozen=True)
+class VariableDefinition:
+    """Describes a variable that a set of parameterizations uses.
+    
+    A set of parameterizations defines each of its variables once, typically in a
+    dedicated module. The parameterizations select needed variables from the common
+    set of defined variables.
+
+    An example for defining a variable for ozone mixing ratio:
+    ```
+    ozone = VariableDefinition(
+        "ozone",
+        GridShape.CELL,
+        "float",
+        "mol mol-1",
+        "Ozone mixing ratio"
+    )
+    ```
+
+    `name` is the name used in the QUACS variable definition. It may or may not match
+    the name used by the host application.
+
+    `dtype` is the type of the variable's values as parameterizations see them: Python
+    `float`, `int` or `bool`. The host application chooses the precision it uses to store
+    `float` and `int` values.
+
+    `transported` asks the host application to move the variable horizontally with the
+    modelled air movement, as it does for its own tracers. Not all models (e.g., box or
+    column models) support this, so it is not a guarantee of transport. Only `float`
+    variables with one value per grid cell can be transported.
+    """
+
+    name: str
+    shape: GridShape
+    dtype: DType
+    units: str
+    description: str
+    transported: bool = False
+
+    def __post_init__(self) -> None:
+        if self.transported and (self.shape is not GridShape.CELL or self.dtype != "float"):
+            raise ValueError(
+                f"Variable '{self.name}' cannot be transported. Only float variables with "
+                f"one value per grid cell are eligible."
+            )
+
+    def read_only(self) -> VariableSpec:
+        """Requests the variable for a parameterization that only reads it."""
+        return self._request(Permissions.READ_ONLY)
+
+    def update(self) -> VariableSpec:
+        """Requests a variable for a parameterization that adjusts its existing value."""
+        return self._request(Permissions.UPDATE)
+
+    def own(self) -> VariableSpec:
+        """Requests the variable for a parameterization that is responsible for setting
+        its value.
+        
+        The host application creates the variable.
+        """
+        return self._request(Permissions.OWN)
+
+    def _request(self, permissions: Permissions) -> VariableSpec:
+        return VariableSpec(
+            self.name,
+            self.shape,
+            self.dtype,
+            self.units,
+            self.description,
+            permissions,
+            transported=self.transported and permissions is Permissions.OWN,
+        )
 
 
 class Permissions(Enum):
@@ -47,27 +123,12 @@ class Permissions(Enum):
 class VariableSpec:
     """Describes one state variable.
 
-    An instance of `VariableSpec` includes enough information for a host model to locate or
-    add a state variable requested by a parameterization.
+    An instance of `VariableSpec` includes enough information for a host application to
+    locate or add a state variable requested by a parameterization. It is usually made
+    from a `VariableDefinition` using `read_only()`, `update()`, or `own()`.
 
-    `requested_by` will be set by the registry using the requesting parameterization name,
-    so it may be left unset by the requesting parameterization.
-
-    `name` is the name of the variable used by the parameterization. When it exists in the
-    list of canonical QUACS variable names, the host application configuration will include a
-    mapping to its internal namespace (if the variable is available). When it is not a
-    known QUACS name, a direct match to a host application variable will be attempted, unless
-    the parameterization is decorated with a host-application-specific name mapping.
-
-    `dtype` is the type of the variable's values as parameterizations see them: Python
-    `float`, `int` or `bool`. The host application chooses the precision it uses to store
-    `float` and `int` values.
-
-    `transported` asks the host application to move the variable horizontally with the
-    modelled air movement, as it does for its own tracers. Not all models (e.g., box or
-    column models) support this, so it is not a guarantee of transport. Only
-    parameterizations that own a variable can request transport, and only for `float`
-    variables with one value per grid cell.
+    `name`, `shape`, `dtype`, `units`, `description`, and `transported` are as for
+    `VariableDefinition`.
     """
 
     name: str

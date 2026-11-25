@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import math
 
+import variables
+
 from quacs import QuacsState, VariableSpec
 from quacs.accessors import Column, InterfaceVariable, Variable, above, below, lower, upper
-from quacs.shapes import GridShape
-from quacs.variables import Permissions
 
 
 class HeatingScheme:
@@ -27,46 +27,11 @@ class HeatingScheme:
 
     def register_variables(self) -> list[VariableSpec]:
         return [
-            VariableSpec(
-                name="temperature",
-                shape=GridShape.CELL,
-                dtype="float",
-                units="K",
-                description="Air temperature",
-                permissions=Permissions.UPDATE,
-            ),
-            VariableSpec(
-                name="cos_solar_zenith_angle",
-                shape=GridShape.COLUMN,
-                dtype="float",
-                units="1",
-                description="Cosine of the solar zenith angle",
-                permissions=Permissions.READ_ONLY,
-            ),
-            VariableSpec(
-                name="column_heating",
-                shape=GridShape.COLUMN,
-                dtype="float",
-                units="K",
-                description="Temperature increase summed over the grid cells of the column",
-                permissions=Permissions.OWN,
-            ),
-            VariableSpec(
-                name="is_daytime",
-                shape=GridShape.COLUMN,
-                dtype="bool",
-                units="1",
-                description="Whether the sun is above the horizon",
-                permissions=Permissions.OWN,
-            ),
-            VariableSpec(
-                name="time_step",
-                shape=GridShape.DOMAIN,
-                dtype="float",
-                units="s",
-                description="Model time step",
-                permissions=Permissions.READ_ONLY,
-            ),
+            variables.temperature.update(),
+            variables.cos_solar_zenith_angle.read_only(),
+            variables.column_heating.own(),
+            variables.is_daytime.own(),
+            variables.time_step.read_only(),
         ]
 
     def run(self, state: QuacsState) -> None:
@@ -136,54 +101,12 @@ class OzoneChemistry:
 
     def register_variables(self) -> list[VariableSpec]:
         return [
-            VariableSpec(
-                name="ozone",
-                shape=GridShape.CELL,
-                dtype="float",
-                units="mol mol-1",
-                description="Ozone mixing ratio",
-                permissions=Permissions.OWN,
-            ),
-            VariableSpec(
-                name="actinic_flux",
-                shape=GridShape.INTERFACE,
-                dtype="float",
-                units="1",
-                description="Actinic flux relative to the flux at the model top",
-                permissions=Permissions.OWN,
-            ),
-            VariableSpec(
-                name="absorbed_flux",
-                shape=GridShape.CELL,
-                dtype="float",
-                units="1",
-                description="Actinic flux absorbed in the grid cell",
-                permissions=Permissions.OWN,
-            ),
-            VariableSpec(
-                name="temperature",
-                shape=GridShape.CELL,
-                dtype="float",
-                units="K",
-                description="Air temperature",
-                permissions=Permissions.READ_ONLY,
-            ),
-            VariableSpec(
-                name="chemistry_updates",
-                shape=GridShape.CELL,
-                dtype="int",
-                units="1",
-                description="Number of times chemistry has updated the grid cell",
-                permissions=Permissions.OWN,
-            ),
-            VariableSpec(
-                name="is_daytime",
-                shape=GridShape.COLUMN,
-                dtype="bool",
-                units="1",
-                description="Whether the sun is above the horizon",
-                permissions=Permissions.READ_ONLY,
-            ),
+            variables.ozone.own(),
+            variables.actinic_flux.own(),
+            variables.absorbed_flux.own(),
+            variables.temperature.read_only(),
+            variables.chemistry_updates.own(),
+            variables.is_daytime.read_only(),
         ]
 
     def run(self, state: QuacsState) -> None:
@@ -250,46 +173,11 @@ class SurfaceDeposition:
 
     def register_variables(self) -> list[VariableSpec]:
         return [
-            VariableSpec(
-                name="ozone_flux",
-                shape=GridShape.INTERFACE,
-                dtype="float",
-                units="mol m-2 s-1",
-                description="Downward ozone flux",
-                permissions=Permissions.OWN,
-            ),
-            VariableSpec(
-                name="surface_ozone_flux",
-                shape=GridShape.SURFACE_CELL,
-                dtype="float",
-                units="mol m-2 s-1",
-                description="Downward ozone deposition flux at the surface",
-                permissions=Permissions.OWN,
-            ),
-            VariableSpec(
-                name="model_top_ozone_flux",
-                shape=GridShape.MODEL_TOP_CELL,
-                dtype="float",
-                units="mol m-2 s-1",
-                description="Downward ozone flux at the model top",
-                permissions=Permissions.OWN,
-            ),
-            VariableSpec(
-                name="ozone",
-                shape=GridShape.CELL,
-                dtype="float",
-                units="mol mol-1",
-                description="Ozone mixing ratio",
-                permissions=Permissions.READ_ONLY,
-            ),
-            VariableSpec(
-                name="surface_wind_speed",
-                shape=GridShape.SURFACE_CELL,
-                dtype="float",
-                units="m s-1",
-                description="10 m wind speed",
-                permissions=Permissions.READ_ONLY,
-            ),
+            variables.ozone_flux.own(),
+            variables.surface_ozone_flux.own(),
+            variables.model_top_ozone_flux.own(),
+            variables.ozone.read_only(),
+            variables.surface_wind_speed.read_only(),
         ]
 
     def run(self, state: QuacsState) -> None:

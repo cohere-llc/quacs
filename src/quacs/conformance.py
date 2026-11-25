@@ -17,7 +17,7 @@ the host applications own output without name conflicts.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -140,7 +140,7 @@ class CellCheck:
             _own("quacs_check_cell_visits", GridShape.CELL, "int", "Times the cell was visited"),
             _own("quacs_check_cell_flag", GridShape.CELL, "bool", "Whether visits is odd"),
             _own("quacs_check_cell_value", GridShape.CELL, "float", "Half of visits"),
-            _own("quacs_check_cell_tag", GridShape.CELL, "int", "Copy if the column's tag"),
+            _own("quacs_check_cell_tag", GridShape.CELL, "int", "Copy of the column's tag"),
             _own(_COLUMN_TAG, GridShape.COLUMN, "int", "A number set by the host application"),
         ]
 
@@ -561,7 +561,10 @@ def verify(checks: Iterable[Check], view: View) -> ConformanceReport:
 
 
 def run_conformance(
-    host: ArrayHostAdapter, checks: Iterable[Check] | None = None, runs: int = 3
+    host: ArrayHostAdapter,
+    checks: Iterable[Check] | None = None,
+    runs: int = 3,
+    names: Mapping[str, str] | None = None,
 ) -> ConformanceReport:
     """Runs `checks` on `host` and reports the outcome.
 
@@ -569,10 +572,22 @@ def run_conformance(
 
     Each check is run `runs` times. `host` must not have run the checks before, because
     this create their variables.
+
+    `names` gives a mapping between variable names used by the current set of QUACS
+    parameterizations and the host application's variable names, when they differ.
     """
     checks = default_checks() if checks is None else list(checks)
-    runtime = Runtime(host, [*checks], {"quacs_check": [check.name for check in checks]})
+    names = dict(names or {})
+    runtime = Runtime(
+        host,
+        [*checks],
+        {"quacs_check": [check.name for check in checks]},
+        names,
+    )
     host.allocate_registered_variables(runtime.register_variables())
+
+    def view(name: str) -> np.ndarray:
+        return host.view(names.get(name, name))
 
     owned = [
         spec.name
@@ -580,37 +595,22 @@ def run_conformance(
         for spec in check.register_variables()
         if spec.permissions is Permissions.OWN
     ]
-    results = [_check_name_map(host), _check_views(host, owned)]
-    results += verify(checks, host.view).results
+    results = [_check_views(view, owned)]
+    results += verify(checks, view).results
     if _COLUMN_TAG in owned:
-        tag_columns(host.view)
+        tag_columns(view)
     for _ in range(runs):
         runtime.run_hook("quacs_check")
-    results += verify(checks, host.view).results
+    results += verify(checks, view).results
     return ConformanceReport(results)
 
 
-def _check_name_map(host: ArrayHostAdapter) -> CheckResult:
-    shapes = host.grid_shapes()
-    missing = sorted(
-        f"{name} -> {host_name}"
-        for name, host_name in host.canonical_name_map().items()
-        if host_name is not None and host_name not in shapes
-    )
-    return CheckResult(
-        "canonical_name_map",
-        "every host name it gives is a variable in grid_shapes",
-        not missing,
-        f"Not in grid_shapes: {', '.join(missing)}." if missing else "",
-    )
-
-
-def _check_views(host: ArrayHostAdapter, names: list[str]) -> CheckResult:
+def _check_views(view: View, names: list[str]) -> CheckResult:
     copies = sorted(
         name
         for name in names
-        if not np.shares_memory(host.view(name), host.view(name))
-        or not host.view(name).flags.writeable
+        if not np.shares_memory(view(name), view(name))
+        or not view(name).flags.writeable
     )
     return CheckResult(
         "view",

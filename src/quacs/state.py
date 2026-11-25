@@ -8,7 +8,7 @@ Provides access to host variables.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Literal
 
 from quacs.accessors import Adjacent, Argument
@@ -32,9 +32,9 @@ class QuacsState:
     an argument instead.
     """
 
-    def __init__(self, host_adapter: HostAdapter, name_map: dict[str, str | None]) -> None:
+    def __init__(self, host_adapter: HostAdapter, names: Mapping[str, str]) -> None:
         self._host_adapter = host_adapter
-        self._name_map = name_map
+        self._names = names
 
     def for_each_cell(self, func: Callable[..., None], *arguments: Argument) -> None:
         """Applies `func` to every grid cell in the model domain.
@@ -87,4 +87,4 @@ class QuacsState:
         return argument
 
     def _host_name(self, name: str) -> str:
-        return self._name_map.get(name) or name
+        return self._names.get(name, name)

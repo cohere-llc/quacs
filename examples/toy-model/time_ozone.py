@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 import time
 
+import config
 import numba
 import numpy as np
 from host_adapter import ToyHostAdapter
@@ -64,9 +65,6 @@ class TimingHost:
         self._host = host
         self.times = {}
 
-    def canonical_name_map(self):
-        return self._host.canonical_name_map()
-
     def for_each_cell(self, func, *arguments):
         start = time.perf_counter()
         self._host.for_each_cell(func, *arguments)
@@ -96,7 +94,7 @@ def new_host(ncolumns, nlevels):
     host = ToyHostAdapter(ncolumns, nlevels)
     registry = ParameterizationRegistry()
     registry.register(new_chemistry())
-    host.create_variables(registry.collect_variable_specs(host.canonical_name_map()))
+    host.create_variables(registry.collect_variable_specs(config.names))
     rng = np.random.default_rng(0)
     host.view("ozone")[...] = rng.uniform(0.0, 1.0, (ncolumns, nlevels))
     host.view("t_host")[...] = rng.uniform(200.0, 320.0, (ncolumns, nlevels))
@@ -128,7 +126,7 @@ def check_reference():
     """Check that the hand-written loops give the same results as the parameterization."""
     quacs_host = new_host(100, NLEVELS)
     reference_host = new_host(100, NLEVELS)
-    new_chemistry().run(QuacsState(quacs_host, quacs_host.canonical_name_map()))
+    new_chemistry().run(QuacsState(quacs_host, config.names))
     arguments = reference_arguments(reference_host)
     for name in OPERATIONS:
         REFERENCES[name](*arguments[name])
@@ -141,7 +139,7 @@ def check_reference():
 def time_quacs(host, repeats):
     """Returns the fastest whole run, and the fastest time of each operation, in seconds."""
     timing = TimingHost(host)
-    state = QuacsState(timing, host.canonical_name_map())
+    state = QuacsState(timing, config.names)
     chemistry = new_chemistry()
     chemistry.run(state)  # compiles the functions
     timing.times.clear()

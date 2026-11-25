@@ -80,10 +80,6 @@ int quacs_initialize(const char *config_path) {
     });
 }
 
-int quacs_map_name(const char *name, const char *host_name) {
-    return guarded([=] { started().attr("map_name")(name, host_name); });
-}
-
 int quacs_variable_count(int *count) {
     return guarded([=] { *count = static_cast<int>(py::len(started().attr("variables")())); });
 }

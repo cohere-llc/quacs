@@ -9,7 +9,7 @@ from .parameterization import Parameterization
 from .registry import ParameterizationRegistry
 from .runtime import Runtime
 from .state import QuacsState
-from .variables import VariableSpec
+from .variables import VariableDefinition, VariableSpec
 
 __version__ = "0.1.0"
 
@@ -20,6 +20,7 @@ __all__ = [
     "ParameterizationRegistry",
     "QuacsState",
     "Runtime",
+    "VariableDefinition",
     "VariableSpec",
     "accessors",
     "exceptions",

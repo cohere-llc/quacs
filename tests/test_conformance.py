@@ -24,6 +24,8 @@ from quacs.shapes import GridShape
 
 _STORAGE_TYPES = {"float": np.float64, "int": np.int32, "bool": np.bool_}
 
+# Host calls their height variable `z`.
+NAMES = {"height": "z"}
 
 class Host(ArrayHostAdapter):
     """A host that stores every variable in the standard layout, and has a height."""
@@ -33,9 +35,6 @@ class Host(ArrayHostAdapter):
         heights = 100.0 * np.arange(1, nlevels + 1)
         self._arrays: dict[str, np.ndarray] = {"z": np.tile(heights, (ncolumns, 1))}
         self._shapes: dict[str, GridShape] = {"z": GridShape.CELL}
-
-    def canonical_name_map(self) -> dict[str, str | None]:
-        return {"height": "z"}
 
     def grid_shapes(self) -> Mapping[str, GridShape]:
         return self._shapes
@@ -77,11 +76,6 @@ class ShortHost(Host):
         self._engine = InterpretedEngine(self.ncolumns - 1, self.nlevels)
 
 
-class UnmappedHost(Host):
-    def canonical_name_map(self) -> dict[str, str | None]:
-        return {"height": "z", "temperature": "t"}
-
-
 def failures(report: ConformanceReport) -> set[str]:
     return {result.name for result in report.results if not result.passed}
 
@@ -89,7 +83,7 @@ def failures(report: ConformanceReport) -> set[str]:
 @pytest.mark.parametrize("compiled", [False, True])
 def test_correct_host_passes(compiled: bool) -> None:
     checks = [*default_checks(), VerticalOrderCheck("height", "m", increases_upward=True)]
-    report = run_conformance(Host(compiled=compiled), checks)
+    report = run_conformance(Host(compiled=compiled), checks, names=NAMES)
     assert report.passed, str(report)
 
 
@@ -114,12 +108,12 @@ def test_unzeroed_variables_fail() -> None:
 
 def test_upside_down_levels_fail_only_the_vertical_order() -> None:
     checks = [*default_checks(), VerticalOrderCheck("height", "m", increases_upward=True)]
-    assert failures(run_conformance(UpsideDownHost(), checks)) == {"quacs_check_vertical_order"}
+    assert failures(run_conformance(UpsideDownHost(), checks, names=NAMES)) == {"quacs_check_vertical_order"}
 
 
 def test_decreasing_variable_passes() -> None:
     checks = [VerticalOrderCheck("height", "m", increases_upward=False)]
-    assert run_conformance(UpsideDownHost(), checks).passed
+    assert run_conformance(UpsideDownHost(), checks, names=NAMES).passed
 
 
 def test_skipped_column_fails() -> None:
@@ -127,10 +121,6 @@ def test_skipped_column_fails() -> None:
     assert {"quacs_check_cell_visits", "quacs_check_column_swept"} <= failures(report)
     visits = next(r for r in report.results if r.name == "quacs_check_cell_visits" and not r.passed)
     assert "index (3, 0)" in visits.detail
-
-
-def test_unknown_host_name_fails() -> None:
-    assert failures(run_conformance(UnmappedHost())) == {"canonical_name_map"}
 
 
 def test_values_lost_between_runs_fail() -> None:
@@ -148,3 +138,9 @@ def test_values_lost_between_runs_fail() -> None:
     report = verify(checks, host.view)
     assert "quacs_check_cell_visits" in failures(report)
     assert "expected 2, found 1" in str(report)
+
+def test_owned_variable_can_have_another_name_in_the_host() -> None:
+    host = Host()
+    assert run_conformance(host, names={"quacs_check_level": "host_level"}).passed
+    assert "host_level" in host.grid_shapes()
+    assert "quacs_check_level" not in host.grid_shapes()

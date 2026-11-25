@@ -12,7 +12,11 @@ The simulation is described by a Python configuration file that defines:
 - `hooks`: a `dict` that holds the names of the parameterizations to run for each hook label,
            in order.
 
-The configuration can also specify to exclude Numba compilation with `compiled = False`.
+The configuration can also define:
+
+- `names`: a `dict` that gives a mapping between variable names used by the current set of
+           QUACS parameterizations to host application variable names, when they differ.
+- `compiled`: `False` to run parameterization functions without Numba compilation.
 
 The host application creates and owns every variable. It provides QUACS access to variable
 memory by calling `bind_variable`. Host state data are operated on in-place.
@@ -22,6 +26,7 @@ from __future__ import annotations
 
 import runpy
 import sys
+from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
 from typing import Any
@@ -97,15 +102,11 @@ class BoundHostAdapter(ArrayHostAdapter):
     """A host adapter for variables that stay in the memory of the host application."""
 
     def __init__(
-        self, ncolumns: int, nlevels: int, name_map: dict[str, str | None], compiled: bool = True
+        self, ncolumns: int, nlevels: int, compiled: bool = True
     ) -> None:
         super().__init__(ncolumns, nlevels, compiled=compiled)
-        self._name_map = name_map
         self._arrays: dict[str, np.ndarray] = {}
         self._shapes: dict[str, GridShape] = {}
-
-    def canonical_name_map(self) -> dict[str, str | None]:
-        return self._name_map
 
     def grid_shapes(self) -> dict[str, GridShape]:
         """Returns the shape of every variable that has been bound, by host name."""
@@ -143,31 +144,26 @@ class EmbeddedRuntime:
     1. Create an instance of `EmbeddedRuntime` with the configuration defining the
        parameterizations, hooks and which parameterizations to run in order, and
        optional QUACS settings including the `compiled` flag;
-    2. `map_name` to associate each host variable with a known QUACS name;
-    3. `variables` to find out which variables to create, and which to look up;
-    4. `set_grid` once the size of the grid is known;
-    5. `bind_variable` for every variable used by any QUACS parameterization in
+    2. `variables` to find out which variables to create, and which to look up;
+    3. `set_grid` once the size of the grid is known;
+    4. `bind_variable` for every variable used by any QUACS parameterization in
        configuration. Called once during initialization, and each time arrays
        change location in memory.
-    6. `run_hook` for each QUACS hook embedded in the host application.
+    5. `run_hook` for each QUACS hook embedded in the host application.
     """
 
-    def __init__(self, config_path: str) -> None:
-        self._parameterizations, hooks, self._compiled = _load_config(config_path)
+    def __init__(self, config_path: str | Path) -> None:
+        config = _load_config(config_path)
+        self._parameterizations = config.parameterizations
+        self._names = config.names
+        self._compiled = config.compiled
         self._registry = ParameterizationRegistry()
         for parameterization in self._parameterizations:
             self._registry.register(parameterization)
-        self._dispatcher = HookDispatcher(self._registry, hooks)
-        self._name_map: dict[str, str | None] = {}
+        self._dispatcher = HookDispatcher(self._registry, config.hooks)
         self._variables: dict[str, VariableSpec] | None = None
         self._host: BoundHostAdapter | None = None
         self._started = False
-
-    def map_name(self, name: str, host_name: str) -> None:
-        """Associates a host application's name for a variable with the QUACS variable name."""
-        if self._variables is not None:
-            raise HostConfigError("Names must be mapped before the variables are listed.")
-        self._name_map[name] = host_name
 
     def variables(self) -> list[VariableSpec]:
         """Returns the variables used by the configured parameterizations, one for each
@@ -177,7 +173,7 @@ class EmbeddedRuntime:
         must already have every other one. After this, no more names can be mapped.
         """
         if self._variables is None:
-            self._variables = _merge(self._registry.collect_variable_specs(self._name_map))
+            self._variables = _merge(self._registry.collect_variable_specs(self._names))
         return list(self._variables.values())
 
     def variable_info(self, index: int) -> tuple[str, str, str, int, int, int, bool]:
@@ -203,7 +199,7 @@ class EmbeddedRuntime:
         if ncolumns < 1 or nlevels < 1:
             raise ValueError(f"A grid of {ncolumns} columns and {nlevels} levels has no cells.")
         self.variables()
-        self._host = BoundHostAdapter(ncolumns, nlevels, self._name_map, self._compiled)
+        self._host = BoundHostAdapter(ncolumns, nlevels, self._compiled)
 
     def bind_variable(
         self,
@@ -251,22 +247,36 @@ class EmbeddedRuntime:
             if unbound := sorted(set(self._variables) - set(host.grid_shapes())):
                 raise HostConfigError(f"These variables have not been bound: {', '.join(unbound)}")
             if any(isinstance(check, CellCheck) for check in self._parameterizations):
-                tag_columns(host.view)
+                tag_columns(self._view)
             self._started = True
-        self._dispatcher.run(label, QuacsState(host, self._name_map))
+        self._dispatcher.run(label, QuacsState(host, self._names))
 
     def check_conformance(self) -> ConformanceReport:
         """Reports on the conformance checks among the configured parameterizations."""
         checks = [check for check in self._parameterizations if isinstance(check, Check)]
-        return verify(checks, self._grid().view)
+        return verify(checks, self._view)
 
     def _grid(self) -> BoundHostAdapter:
         if self._host is None:
             raise HostConfigError("The grid has not been set.")
         return self._host
 
+    def _view(self, name: str) -> np.ndarray:
+        """Returns a variable by the name that the parameterizations use."""
+        return self._grid().view(self._names.get(name, name))
 
-def _load_config(path: str) -> tuple[list[Parameterization], dict[str, list[str]], bool]:
+
+@dataclass(frozen=True)
+class _Config:
+    """Configuration file definitions."""
+
+    parameterizations: list[Parameterization]
+    hooks: dict[str, list[str]]
+    names: dict[str, str]
+    compiled: bool
+
+
+def _load_config(path: str) -> _Config:
     """Runs a QUACS configuration script and returns its parameterizations, hooks, and `compiled`.
     
     The folder of the file is added to the module search path, so that the file can
@@ -286,9 +296,20 @@ def _load_config(path: str) -> tuple[list[Parameterization], dict[str, list[str]
         raise HostConfigError(
             f"The configuration file '{path}' does not define: {', '.join(missing)}."
         )
-    return (
+    names = config.get("names", {})
+    if not isinstance(names, dict) or not all(
+        isinstance(name, str) and isinstance(host_name, str) for name, host_name in names.items()
+    ):
+        raise HostConfigError(
+            f"In the configuration file '{path}', `names` must be a dict that gives a "
+            f"mapping between the variable names used by the configured set of QUACS "
+            f"parameterizations and the host application variable names, when they "
+            f"differ, as strings."
+        )
+    return _Config(
         list(config["parameterizations"]),
         dict(config["hooks"]),
+        dict(names),
         bool(config.get("compiled", True)),
     )
 

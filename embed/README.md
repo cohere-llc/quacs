@@ -52,7 +52,6 @@ application calls them in this order:
 | Step | Function | Purpose |
 |---|---|---|
 | 1 | `quacs_initialize` | Start the Python interpreter and run the QUACS configuration script. |
-| 2 | `quacs_map_name` | Provided a mapping for host variable names to common QUACS variable names. |
 | 3 | `quacs_variable_count`, `quacs_variable_info` | Get information for each variable used by the parmaeterizations. |
 | 4 | `quacs_set_grid` | Pass the dimensions of the grid to QUACS. |
 | 5 | `quacs_bind_variable` | Associate each QUACS variable with the location in memory of the host's data. |
@@ -70,12 +69,20 @@ the hooks the run in:
 ```python
 from my_parameterizations import OzoneChemistry, SurfaceDeposition
 
-parameterizations = [OzoneChemsitry, SurfaceDeposition]
+parameterizations = [OzoneChemistry(), SurfaceDeposition()]
 hooks = {
     "before_physics": ["ozone_chemistry"],
     "after_physics": ["ozone_chemistry", "surface_deposition"],
 }
+names = {
+    "temperature": "t_host",
+    "ozone": "O3",
+}
 ```
+
+`names` is optional. It provides a mapping between the variable names used by the
+configured set of parameterizations and the host application variable names, when
+they differ.
 
 The folder that holds the configuration file is added to Python's module search path,
 so parameterizations can be kept alongside it. Setting `compiled = False` in the file

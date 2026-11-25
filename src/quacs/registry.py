@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+from collections.abc import Mapping
 
 from quacs.exceptions import NameConflictError, OverwriteVariableError, ReadOnlyVariableError
 from quacs.parameterization import Parameterization
@@ -20,6 +21,7 @@ class ParameterizationRegistry:
         self._parameterizations: dict[str, Parameterization] = {}
         self._owned_variables: dict[str, VariableSpec] = {}
         self._accessed_variables: dict[str, VariableSpec] = {}
+        self._requests: dict[str, list[VariableSpec]] = {}
 
     def register(self, parameterization: Parameterization) -> None:
         """Add a parameterization.
@@ -47,6 +49,18 @@ class ParameterizationRegistry:
                     f"Variable '{var.name}' cannot be transported. Only a float variable "
                     f"with one value per grid cell can be, and only its owner can request it."
                 )
+            var = dataclasses.replace(var, requested_by=parameterization.name)
+            if var.name in self._requests and len(self._requests[var.name]) > 0:
+                prior = self._requests[var.name][0]
+                if (prior.shape, prior.dtype, prior.units) != (var.shape, var.dtype, var.units):
+                    raise ValueError(
+                        f"Variable '{var.name}' is defined differently by '{prior.requested_by}' "
+                        f"({prior.shape.name}, {prior.dtype}, {prior.units}) and "
+                        f"'{var.requested_by}' ({var.shape.name}, {var.dtype}, {var.units})."
+                    )
+                self._requests[var.name].append(var)
+            else:
+                self._requests[var.name] = [var]
             if var.permissions == Permissions.OWN:
                 if var.name in self._owned_variables:
                     raise OverwriteVariableError(
@@ -56,13 +70,9 @@ class ParameterizationRegistry:
                             parameterization.name,
                         ],
                     )
-                self._owned_variables[var.name] = dataclasses.replace(
-                    var, requested_by=parameterization.name
-                )
+                self._owned_variables[var.name] = var
             else:
-                self._accessed_variables[var.name] = dataclasses.replace(
-                    var, requested_by=parameterization.name
-                )
+                self._accessed_variables[var.name] = var
         self._parameterizations[parameterization.name] = parameterization
 
     def get(self, name: str) -> Parameterization:
@@ -77,16 +87,17 @@ class ParameterizationRegistry:
     def __contains__(self, name: str) -> bool:
         return name in self._parameterizations
 
-    def collect_variable_specs(self, host_name_map: dict[str, str | None]) -> list[VariableSpec]:
+    def collect_variable_specs(self, names: Mapping[str, str]) -> list[VariableSpec]:
         """Collect and validate Parameterization VariableSpecs.
+
+        `names` defines a mapping from variable names used by the current set of QUACS
+        parameterizations to the host applications variable names, when they differ.
 
         Variables must have exactly one owner. Variables can be owned either by the host application
         (pre-existing variables) or a parameterization (registered with `OWN` permissions)
         """
         return [
-            dataclasses.replace(var, name=host_name_map[var.name] or var.name)
-            if var.name in host_name_map
-            else var
+            dataclasses.replace(var, name=names.get(var.name, var.name))
             for var in itertools.chain(
                 self._owned_variables.values(), self._accessed_variables.values()
             )

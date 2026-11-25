@@ -28,9 +28,9 @@ _KINDS: dict[str, str] = {"float": "f", "int": "iu", "bool": "b"}
 class ArrayHostAdapter(ABC):
     """A host adapter for host application that can present each variable as a NumPy view.
 
-    A host application subclasses this and provides `canonical_name_map`, `grid_shapes`,
-    `view`, and `create_variable`. This class provides the `for_each_*` operations, the
-    registration of variables, and what the QUACS profiler needs.
+    A host application subclasses this and provides `grid_shapes`, `view`, and
+    `create_variable`. This class provides the `for_each_*` operations, the registration
+    of variables, and what the QUACS profiler needs.
 
     `view` must return each variable in standard layout, without copying it:
 
@@ -59,10 +59,6 @@ class ArrayHostAdapter(ABC):
         return self._nlevels
 
     # Host Application provided functions
-
-    @abstractmethod
-    def canonical_name_map(self) -> dict[str, str | None]:
-        """Returns a mapping of QUACS canonical variable name -> host variable name."""
 
     @abstractmethod
     def grid_shapes(self) -> Mapping[str, GridShape]:

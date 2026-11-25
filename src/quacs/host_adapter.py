@@ -23,17 +23,10 @@ class HostAdapter(Protocol):
 
     - A local scalar variable is passed to `func` unchanged.
     - The name of a variable with one value for the whole domain is passed as the
-      variable's current value (read-only)
+      variable's current value (read-only).
     - Any other variable is passed as an accessor for that variable.
+    - Variables are named by their host application names.
     """
-
-    def canonical_name_map(self) -> dict[str, str | None]:
-        """Returns a mapping of QUACS canonical variable name -> host variable name.
-
-        For variables that are unavailable in the host application, set the value
-        to `None`.
-        """
-        ...
 
     def for_each_cell(self, func: Callable[..., None], *variables: Argument) -> None:
         """Applies `func` to each grid cell in the model grid.

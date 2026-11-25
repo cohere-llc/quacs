@@ -11,7 +11,7 @@ compiled by Numba.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
@@ -142,6 +142,7 @@ def profile(
     ranges: dict[str, tuple[float, float]],
     samples: int = 50,
     seed: int = 0,
+    names: Mapping[str, str] | None = None,
 ) -> ProfileReport:
     """Runs `parameterization` on `host` for `samples` different starting conditions and
     reports back timing and results.
@@ -150,6 +151,9 @@ def profile(
     parameterization uses. A range is needed for every such variable the parameterization
     uses but does not own. Each variable owned by a parameterization is set to zero or
     `False`, unless a range is provided.
+
+    `names` gives a mapping between the current set of QUACS parameterizations variable
+    names and the host application variable names, when they differ.
 
     The starting conditions are from a Latin hypercube sample. In each sample, the same
     value is applied to every grid cell/interface/column in the domain.
@@ -161,16 +165,16 @@ def profile(
 
     registry = ParameterizationRegistry()
     registry.register(parameterization)
-    name_map = host.canonical_name_map()
-    host_specs = registry.collect_variable_specs(name_map)
+    names = dict(names or {})
+    host_specs = registry.collect_variable_specs(names)
     host.create_variables(host_specs)
 
-    state = QuacsState(host, name_map)
+    state = QuacsState(host, names)
     grid_cells = host.grid_cell_count()
     sampled = [spec for spec in specs.values() if _is_sampled(spec, ranges)]
     starting_values = _sample(sampled, ranges, samples, np.random.default_rng(seed))
 
-    host_names = {name: name_map.get(name) or name for name in specs}
+    host_names = {name: names.get(name, name) or name for name in specs}
 
     def start_from(sample: int) -> None:
         for name, spec in specs.items():
@@ -183,7 +187,7 @@ def profile(
     # host that compiles them the chance to do so.
     recorder = _RecordingHost(host)
     start_from(0)
-    parameterization.run(QuacsState(recorder, name_map))
+    parameterization.run(QuacsState(recorder, names))
 
     times = np.empty(samples)
     ending_means = {name: np.empty(samples) for name in specs}
@@ -278,9 +282,6 @@ class _RecordingHost:
     def __init__(self, host: HostAdapter) -> None:
         self._host = host
         self.calls: list[_Call] = []
-
-    def canonical_name_map(self) -> dict[str, str | None]:
-        return self._host.canonical_name_map()
 
     def for_each_cell(self, func: Callable[..., None], *arguments: Argument) -> None:
         self.calls.append(("cell", func, arguments))
